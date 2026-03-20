@@ -17,7 +17,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { AssistantMessageComponent, getAgentDir } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, matchesKey } from "@mariozechner/pi-tui";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -821,16 +821,16 @@ export default function (pi: ExtensionAPI) {
 				invalidate() {},
 				dispose() { clearInterval(timer); },
 				handleInput(data: string) {
-					if (data === "q") {
+					if (matchesKey(data, "escape") || data === "q") {
 						clearInterval(timer);
 						done(null);
-					} else if (data === "\x1b[C" || data === "\x1bOC" || data === "l" || data === "n") {
+					} else if (matchesKey(data, "right") || data === "l" || data === "n") {
 						idx = (idx + 1) % ANIMATIONS.length;
 						frame = 0;
-					} else if (data === "\x1b[D" || data === "\x1bOD" || data === "h" || data === "p") {
+					} else if (matchesKey(data, "left") || data === "h" || data === "p") {
 						idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
 						frame = 0;
-					} else if (data === "\r" || data === " ") {
+					} else if (matchesKey(data, "enter") || data === " ") {
 						clearInterval(timer);
 						done(ANIMATIONS[idx].name);
 					}
@@ -852,7 +852,7 @@ export default function (pi: ExtensionAPI) {
 						theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
 					);
 					out.push("");
-					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  q quit"));
+					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc/q quit"));
 					out.push("");
 					return out;
 				},
