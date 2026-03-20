@@ -22,6 +22,7 @@ const STATE_KEY = Symbol.for("pi.ext.animatedThinking.state");
 interface AnimState {
 	workingAnim: string; // animation name for working state
 	thinkingAnim: string; // animation name for thinking state
+	toolAnim: string; // animation name for tool execution
 	randomMode: boolean;
 	frame: number;
 	workingTimer: ReturnType<typeof setInterval> | null;
@@ -29,6 +30,9 @@ interface AnimState {
 	thinkingLabels: Map<string, Text>;
 	theme?: ExtensionContext["ui"]["theme"];
 	enabled: boolean;
+	isThinking: boolean;
+	isToolRunning: boolean;
+	currentWorkingCtx: ExtensionContext | null;
 }
 
 function getState(): AnimState {
@@ -82,6 +86,7 @@ export default function (pi: ExtensionAPI) {
 	const state: AnimState = {
 		workingAnim: "crush",
 		thinkingAnim: "shimmer",
+		toolAnim: "pipeline",
 		randomMode: false,
 		frame: 0,
 		workingTimer: null,
@@ -89,6 +94,9 @@ export default function (pi: ExtensionAPI) {
 		thinkingLabels: new Map(),
 		theme: undefined,
 		enabled: true,
+		isThinking: false,
+		isToolRunning: false,
+		currentWorkingCtx: null,
 	};
 	(globalThis as any)[STATE_KEY] = state;
 	ensurePatch();
@@ -98,9 +106,22 @@ export default function (pi: ExtensionAPI) {
 		stopWorkingAnimation();
 		if (!state.enabled) return;
 		state.frame = 0;
-		const animName = state.randomMode ? pickRandom("working") : state.workingAnim;
+		state.currentWorkingCtx = ctx;
+		// Pick initial animations (will switch dynamically based on state)
+		const randomWorkingName = state.randomMode ? pickRandom("working") : null;
+		const randomThinkingName = state.randomMode ? pickRandom("thinking") : null;
+		const randomToolName = state.randomMode ? pickRandom("working") : null;
 		state.workingTimer = setInterval(() => {
 			state.frame++;
+			// Priority: thinking > tool > working
+			let animName: string;
+			if (state.isThinking) {
+				animName = randomThinkingName || state.thinkingAnim;
+			} else if (state.isToolRunning) {
+				animName = randomToolName || state.toolAnim;
+			} else {
+				animName = randomWorkingName || state.workingAnim;
+			}
 			const rendered = renderFrame(animName, state.frame, 50);
 			ctx.ui.setWorkingMessage(rendered);
 		}, 60);
@@ -111,6 +132,7 @@ export default function (pi: ExtensionAPI) {
 			clearInterval(state.workingTimer);
 			state.workingTimer = null;
 		}
+		state.currentWorkingCtx = null;
 	}
 
 	// ─── Thinking animation tick ─────────────────────────────────
@@ -143,6 +165,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_end", async (_e, ctx) => {
+		state.isThinking = false;
+		state.isToolRunning = false;
 		stopWorkingAnimation();
 		stopThinkingTicker();
 		ctx.ui.setWorkingMessage(); // restore default
@@ -153,15 +177,30 @@ export default function (pi: ExtensionAPI) {
 		const se = event.assistantMessageEvent as any;
 		if (!se || typeof se.type !== "string") return;
 		if (se.type === "thinking_start" || se.type === "thinking_delta") {
+			state.isThinking = true;
 			if (state.enabled) startThinkingTicker();
 		}
 		if (se.type === "thinking_end") {
+			state.isThinking = false;
 			// Keep label with final frame
+		}
+		if (se.type === "text_delta") {
+			// Content started flowing, no longer thinking
+			state.isThinking = false;
 		}
 	});
 
 	pi.on("message_end", async () => {
+		state.isThinking = false;
 		stopThinkingTicker();
+	});
+
+	pi.on("tool_execution_start", async () => {
+		state.isToolRunning = true;
+	});
+
+	pi.on("tool_execution_end", async () => {
+		state.isToolRunning = false;
 	});
 
 	pi.on("session_switch", async (_e, ctx) => {
@@ -175,21 +214,100 @@ export default function (pi: ExtensionAPI) {
 		stopThinkingTicker();
 	});
 
+	// ─── Showcase Command ────────────────────────────────────────
+	pi.registerCommand("animation-showcase", {
+		description: "Cycle through all animations (Escape to stop, ←/→ to switch)",
+		handler: async (_args, ctx) => {
+			await ctx.ui.custom((tui, theme, _keybindings, done) => {
+				let idx = 0;
+				let frame = 0;
+
+				const timer = setInterval(() => {
+					frame++;
+					tui.requestRender();
+				}, 50);
+
+				return {
+					invalidate() {},
+					dispose() { clearInterval(timer); },
+					handleInput(data: string) {
+						if (data === "\x1b" || data === "q") {
+							// Escape or q — exit
+							clearInterval(timer);
+							done(ANIMATIONS[idx].name);
+						} else if (data === "\x1b[C" || data === "l" || data === "n") {
+							// Right arrow, l, or n — next
+							idx = (idx + 1) % ANIMATIONS.length;
+							frame = 0;
+						} else if (data === "\x1b[D" || data === "h" || data === "p") {
+							// Left arrow, h, or p — prev
+							idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
+							frame = 0;
+						} else if (data === "\r" || data === " ") {
+							// Enter or space — select current
+							clearInterval(timer);
+							done(ANIMATIONS[idx].name);
+						}
+					},
+					render(width: number): string[] {
+						const anim = ANIMATIONS[idx];
+						const rendered = anim.fn(frame, Math.min(50, width - 4));
+						const lines: string[] = [];
+						lines.push("");
+						lines.push(theme.fg("accent", "  ▶ Animation Showcase"));
+						lines.push("");
+						lines.push(`  ${rendered}`);
+						lines.push("");
+						lines.push(
+							theme.fg("muted", `  [${idx + 1}/${ANIMATIONS.length}] `) +
+							theme.fg("text", anim.name) +
+							theme.fg("muted", ` (${anim.category}) — ${anim.description}`)
+						);
+						lines.push("");
+						lines.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
+						lines.push("");
+						return lines;
+					},
+				};
+			}).then((selectedName) => {
+				if (selectedName) {
+					ctx.ui.notify(`Selected: ${selectedName}. Use /animation ${selectedName} to apply.`, "info");
+				}
+			});
+		},
+	});
+
 	// ─── Command ─────────────────────────────────────────────────
 	pi.registerCommand("animation", {
 		description: "Set thinking/working animation",
 		getArgumentCompletions: (prefix) => {
 			const items = [
 				...ANIMATIONS.map(a => ({
-					text: a.name,
+					value: a.name,
+					label: a.name,
 					description: `[${a.category}] ${a.description}`,
 				})),
-				{ text: "random", description: "Random animation each time" },
-				{ text: "off", description: "Disable animations" },
-				{ text: "on", description: "Enable animations" },
+				...ANIMATIONS.map(a => ({
+					value: `working:${a.name}`,
+					label: `working:${a.name}`,
+					description: `Working only — ${a.description}`,
+				})),
+				...ANIMATIONS.map(a => ({
+					value: `thinking:${a.name}`,
+					label: `thinking:${a.name}`,
+					description: `Thinking only — ${a.description}`,
+				})),
+				...ANIMATIONS.map(a => ({
+					value: `tool:${a.name}`,
+					label: `tool:${a.name}`,
+					description: `Tool execution only — ${a.description}`,
+				})),
+				{ value: "random", label: "random", description: "Random animation each time" },
+				{ value: "off", label: "off", description: "Disable animations" },
+				{ value: "on", label: "on", description: "Enable animations" },
 			];
 			if (!prefix) return items;
-			return items.filter(i => i.text.startsWith(prefix));
+			return items.filter(i => i.value.startsWith(prefix));
 		},
 		handler: async (args, ctx) => {
 			const arg = args.trim().toLowerCase();
@@ -197,7 +315,7 @@ export default function (pi: ExtensionAPI) {
 			if (!arg) {
 				// Show current status
 				const status = state.enabled
-					? `Working: ${state.workingAnim}, Thinking: ${state.thinkingAnim}${state.randomMode ? " (random)" : ""}`
+					? `Working: ${state.workingAnim}, Thinking: ${state.thinkingAnim}, Tool: ${state.toolAnim}${state.randomMode ? " (random)" : ""}`
 					: "Animations disabled";
 				const list = ANIMATIONS.map(a =>
 					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)}] ${a.description}`
@@ -229,11 +347,12 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// Parse: "name" or "working:name" or "thinking:name"
-			let target: "both" | "working" | "thinking" = "both";
+			// Parse: "name" or "working:name" or "thinking:name" or "tool:name"
+			let target: "all" | "working" | "thinking" | "tool" = "all";
 			let name = arg;
 			if (arg.startsWith("working:")) { target = "working"; name = arg.slice(8); }
 			else if (arg.startsWith("thinking:")) { target = "thinking"; name = arg.slice(9); }
+			else if (arg.startsWith("tool:")) { target = "tool"; name = arg.slice(5); }
 
 			const anim = getAnimation(name);
 			if (!anim) {
@@ -243,10 +362,14 @@ export default function (pi: ExtensionAPI) {
 
 			state.enabled = true;
 			state.randomMode = false;
-			if (target === "both" || target === "working") state.workingAnim = name;
-			if (target === "both" || target === "thinking") state.thinkingAnim = name;
+			if (target === "all" || target === "working") state.workingAnim = name;
+			if (target === "all" || target === "thinking") state.thinkingAnim = name;
+			if (target === "all" || target === "tool") state.toolAnim = name;
 
-			ctx.ui.notify(`Animation set: ${target === "both" ? `working=${name}, thinking=${name}` : `${target}=${name}`}`, "info");
+			const msg = target === "all"
+				? `working=${name}, thinking=${name}, tool=${name}`
+				: `${target}=${name}`;
+			ctx.ui.notify(`Animation set: ${msg}`, "info");
 		},
 	});
 }
