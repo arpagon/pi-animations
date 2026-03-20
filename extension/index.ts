@@ -14,7 +14,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { AssistantMessageComponent } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
-import { ANIMATIONS, getAnimation, getAnimationsForCategory, type AnimationFn, type AnimCategory } from "./animations.js";
+import { ANIMATIONS, getAnimation, getAnimationsForCategory, type AnimationFn, type AnimCategory, type AnimPhase } from "./animations.js";
 
 const PATCH_KEY = Symbol.for("pi.ext.animatedThinking.patch");
 const STATE_KEY = Symbol.for("pi.ext.animatedThinking.state");
@@ -39,10 +39,10 @@ function getState(): AnimState {
 	return (globalThis as any)[STATE_KEY];
 }
 
-function renderFrame(animName: string, frame: number, width: number): string {
+function renderFrame(animName: string, frame: number, width: number, phase?: AnimPhase): string {
 	const anim = getAnimation(animName);
-	if (!anim) return "Thinking...";
-	return anim.fn(frame, width);
+	if (!anim) return "Working...";
+	return anim.fn(frame, width, phase);
 }
 
 function pickRandom(cat: AnimCategory): string {
@@ -115,14 +115,18 @@ export default function (pi: ExtensionAPI) {
 			state.frame++;
 			// Priority: thinking > tool > working
 			let animName: string;
+			let phase: AnimPhase;
 			if (state.isThinking) {
 				animName = randomThinkingName || state.thinkingAnim;
+				phase = "thinking";
 			} else if (state.isToolRunning) {
 				animName = randomToolName || state.toolAnim;
+				phase = "tool";
 			} else {
 				animName = randomWorkingName || state.workingAnim;
+				phase = "working";
 			}
-			const rendered = renderFrame(animName, state.frame, 50);
+			const rendered = renderFrame(animName, state.frame, 50, phase);
 			ctx.ui.setWorkingMessage(rendered);
 		}, 60);
 	}
@@ -142,7 +146,7 @@ export default function (pi: ExtensionAPI) {
 			state.frame++;
 			const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
 			for (const [, label] of state.thinkingLabels) {
-				label.setText(renderFrame(animName, state.frame, 60));
+				label.setText(renderFrame(animName, state.frame, 60, "thinking"));
 			}
 		}, 60);
 	}

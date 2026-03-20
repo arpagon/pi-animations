@@ -39,7 +39,14 @@ function lerpGrad(grad: number[][], t: number): [number, number, number] {
 
 const ellipsis = (f: number) => [".", "..", "...", ""][Math.floor(f / 10) % 4];
 
-export type AnimationFn = (frame: number, width: number) => string;
+export type AnimPhase = "thinking" | "working" | "tool";
+export type AnimationFn = (frame: number, width: number, phase?: AnimPhase) => string;
+
+const PHASE_LABELS: Record<AnimPhase, string> = {
+	thinking: "Thinking",
+	working: "Working",
+	tool: "Running",
+};
 
 // ─── 02 Neural Pulse ─────────────────────────────────────────────
 export const neuralPulse: AnimationFn = (f, w) => {
@@ -57,8 +64,8 @@ export const neuralPulse: AnimationFn = (f, w) => {
 };
 
 // ─── 03 Glitch Text ──────────────────────────────────────────────
-export const glitchText: AnimationFn = (f) => {
-	const text = "Thinking";
+export const glitchText: AnimationFn = (f, _w, phase) => {
+	const text = PHASE_LABELS[phase || "thinking"];
 	const glyphs = "█▓▒░╳╱╲¥£€$#@!?&%~*";
 	const colors = [rgb(0, 255, 200), rgb(255, 0, 100), rgb(100, 200, 255), rgb(255, 255, 0)];
 	let line = "";
@@ -235,14 +242,15 @@ const scrambleChars = "0123456789abcdefABCDEF~!@#$£€%^&*()+=_";
 const scrambleBirths = Array.from({ length: 15 }, () => Math.random() * 20);
 const scrambleRamp: number[][] = [];
 for (let i = 0; i < 24; i++) { const t = i / 24, a = t * Math.PI * 2; scrambleRamp.push([Math.round(Math.sin(a) * 127 + 128), Math.round(Math.sin(a + 2.094) * 80 + 80), Math.round(Math.sin(a + 4.189) * 127 + 128)]); }
-export const crushScramble: AnimationFn = (f) => {
+export const crushScramble: AnimationFn = (f, _w, phase) => {
 	const sw = 15, init = f > 20;
 	let line = "";
 	for (let i = 0; i < sw; i++) {
 		const ci = (i + (init ? f : 0)) % scrambleRamp.length, [r, g, b] = scrambleRamp[ci];
 		line += rgb(r, g, b) + (!init && f < scrambleBirths[i] ? "." : scrambleChars[Math.floor(Math.random() * scrambleChars.length)]);
 	}
-	line += " " + rgb(200, 200, 200) + "Thinking";
+	const label = PHASE_LABELS[phase || "thinking"];
+	line += " " + rgb(200, 200, 200) + label;
 	if (init) line += rgb(200, 200, 200) + ellipsis(f);
 	return line + reset;
 };
@@ -269,8 +277,8 @@ export const piLogoPulse: AnimationFn = (f) => {
 };
 
 // ─── 22 Shimmer Text ─────────────────────────────────────────────
-export const shimmerText: AnimationFn = (f) => {
-	const text = "Thinking...";
+export const shimmerText: AnimationFn = (f, _w, phase) => {
+	const text = PHASE_LABELS[phase || "thinking"] + "...";
 	const base = [200, 200, 200];
 	let line = "";
 	for (let i = 0; i < text.length; i++) {
@@ -309,7 +317,7 @@ export const vibeTypewriter: AnimationFn = (f) => {
 
 // ─── 26 Orbit Dots ───────────────────────────────────────────────
 const dotChars = ["·", "∘", "○", "●", "◉", "●", "○", "∘"];
-export const orbitDots: AnimationFn = (f) => {
+export const orbitDots: AnimationFn = (f, _w, phase) => {
 	let line = "";
 	for (let i = 0; i < 5; i++) {
 		const phase = Math.sin(f * 0.12 - i * 0.8), norm = (phase + 1) / 2;
@@ -319,7 +327,8 @@ export const orbitDots: AnimationFn = (f) => {
 		line += (norm > 0.7 ? bold : "") + rgb(Math.round(r * br), Math.round(g * br), Math.round(b * br)) + dotChars[ci] + nobold + " ";
 	}
 	const [lr, lg, lb] = lerpGrad(PI_GRAD, (f * 0.08 % PI_GRAD.length) / PI_GRAD.length);
-	line += "  " + rgb(lr, lg, lb) + "Thinking" + rgb(180, 180, 200) + ellipsis(f);
+	const label = PHASE_LABELS[phase || "thinking"];
+	line += "  " + rgb(lr, lg, lb) + label + rgb(180, 180, 200) + ellipsis(f);
 	return line + reset;
 };
 
