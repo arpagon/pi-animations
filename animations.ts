@@ -533,6 +533,7 @@ function getAnimationsForCategory(cat: AnimCategory): AnimationDef[] {
 // Extension entry point
 // ═══════════════════════════════════════════════════════════════
 
+const PATCH_KEY = Symbol.for("pi.ext.animatedThinking.patch");
 const STATE_KEY = Symbol.for("pi.ext.animatedThinking.state");
 const CONFIG_NAME = "pi-tui-animations.json";
 
