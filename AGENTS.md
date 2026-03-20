@@ -1,50 +1,28 @@
-# pi-tui-animations
+# pi-animations
 
-Animated thinking/working indicators for pi coding agent.
-
-## Goal
-
-Replace pi's default "Working..." spinner and "Thinking..." label with visually rich
-terminal animations using ANSI true color, Unicode, and Nerd Font glyphs.
+Animated thinking/working/tool indicators for pi coding agent.
 
 ## Structure
 
-- `explorations/` — standalone animation demos (run with `bun run explorations/XX-name.ts`)
-- `extension/` — pi extension (the actual product)
-  - `index.ts` — extension entry point (events, commands, monkey-patch)
-  - `animations.ts` — all animation renderers as pure functions
+- `extension/` — pi extension (the product)
+  - `index.ts` — entry point: events, `/animation` command, AssistantMessageComponent patch
+  - `animations.ts` — 21 animation renderers as pure functions
+- `explorations/` — standalone demos (`bun run explorations/XX-name.ts`)
 - `tmux-demo.sh` — launch all demos in tmux
 
-## Running demos
-
-```bash
-bash tmux-demo.sh
-tmux attach -t pi-anims
-# Ctrl-b n/p to navigate
-```
-
-## Using the extension
+## Quick start
 
 ```bash
 pi -e ./extension/index.ts
-
-# Commands inside pi:
-/animation              # show current + list all
-/animation crush        # set both working + thinking
-/animation working:fire # set only working
-/animation thinking:shimmer # set only thinking
-/animation random       # random each time
-/animation off          # disable
+/animation showcase    # browse all
+/animation fire3       # set all states
 ```
 
-## Animation Categories
+## Architecture
 
-- **Thinking** (7): neural-pulse, plasma-wave, starfield, brainstorm, dev-constellation, shimmer, orbit-dots
-- **Working** (4): pacman, pipeline, fire, neon-bounce
-- **Both** (6): glitch-text, matrix, icon-morph, crush, pi-pulse, typewriter
-
-## Requirements
-
-- Terminal with true color (24-bit) support
-- Nerd Font (for icon-based animations)
-- pi coding agent v0.60+
+- **1-line**: `setWorkingMessage()` on pi's Loader
+- **3-line**: `setWidget("anim-multi", lines)` for multi-line
+- **Thinking label**: monkey-patch `AssistantMessageComponent.updateContent()`
+- **State priority**: thinking > tool > working
+- **Config**: `~/.pi/agent/extensions/pi-tui-animations.json`
+- **AnimationFn**: `(frame, width, phase?) => string | string[]`

@@ -1,7 +1,7 @@
 {
-  "name": "pi-animated-thinking",
+  "name": "pi-animations",
   "version": "0.1.0",
-  "description": "Animated thinking/working indicators for pi coding agent",
+  "description": "Animated thinking/working/tool indicators for pi coding agent",
   "main": "index.ts",
   "dependencies": {
     "@mariozechner/pi-coding-agent": "*",
