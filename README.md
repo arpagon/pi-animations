@@ -12,11 +12,22 @@ https://github.com/user-attachments/assets/demo.mp4
 
 ## Install
 
-```bash
-# Clone
-git clone https://github.com/arpagon/pi-animations.git
+### From npm (recommended)
 
-# Run pi with the extension
+```bash
+pi install pi-animations
+```
+
+### From GitHub
+
+```bash
+pi install github.com/arpagon/pi-animations
+```
+
+### Manual
+
+```bash
+git clone https://github.com/arpagon/pi-animations.git
 pi -e ./pi-animations/animations.ts
 ```
 
@@ -25,7 +36,7 @@ Or add to `~/.pi/agent/agent.json`:
 ```json
 {
   "extensions": [
-    "path/to/pi-animations/animations.ts"
+    "npm:pi-animations"
   ]
 }
 ```

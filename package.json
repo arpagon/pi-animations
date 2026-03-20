@@ -1,9 +1,38 @@
 {
   "name": "pi-animations",
   "version": "0.1.0",
-  "description": "Animated thinking/working/tool indicators for pi coding agent",
-  "main": "index.ts",
-  "dependencies": {
+  "description": "Animated thinking/working/tool indicators for the Pi coding agent — 21 terminal animations with ANSI true color and Nerd Font glyphs",
+  "license": "MIT",
+  "author": "arpagon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arpagon/pi-animations.git"
+  },
+  "homepage": "https://github.com/arpagon/pi-animations",
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "pi-extension",
+    "pi-package",
+    "animation",
+    "tui",
+    "terminal",
+    "spinner",
+    "thinking",
+    "nerd-font",
+    "ansi"
+  ],
+  "files": [
+    "animations.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./animations.ts"
+    ]
+  },
+  "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
   }
