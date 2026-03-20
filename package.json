@@ -1,6 +1,6 @@
 {
   "name": "pi-animations",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Animated thinking/working/tool indicators for the Pi coding agent — 21 terminal animations with ANSI true color and Nerd Font glyphs",
   "license": "MIT",
   "author": "arpagon",
@@ -30,7 +30,8 @@
   "pi": {
     "extensions": [
       "./animations.ts"
-    ]
+    ],
+    "video": "https://github.com/arpagon/pi-animations/releases/download/v0.1.0/demo.mp4"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",
