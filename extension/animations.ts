@@ -40,7 +40,7 @@ function lerpGrad(grad: number[][], t: number): [number, number, number] {
 const ellipsis = (f: number) => [".", "..", "...", ""][Math.floor(f / 10) % 4];
 
 export type AnimPhase = "thinking" | "working" | "tool";
-export type AnimationFn = (frame: number, width: number, phase?: AnimPhase) => string;
+export type AnimationFn = (frame: number, width: number, phase?: AnimPhase) => string | string[];
 
 const PHASE_LABELS: Record<AnimPhase, string> = {
 	thinking: "Thinking",
@@ -353,6 +353,91 @@ export const neonBounce: AnimationFn = (f, w) => {
 	return rgb(80, 80, 100) + "▐" + buf.join("") + rgb(80, 80, 100) + "▌" + reset;
 };
 
+// ─── 3-LINE: Fire ────────────────────────────────────────────────
+const fire3Buf = Array.from({ length: 5 }, () => new Float64Array(50));
+export const fire3: AnimationFn = (f, w) => {
+	const W = Math.min(50, w);
+	for (let x = 0; x < W; x++) fire3Buf[4][x] = Math.random() > 0.3 ? 1 : Math.random() * 0.5;
+	for (let y = 0; y < 4; y++) for (let x = 0; x < W; x++)
+		fire3Buf[y][x] = (fire3Buf[y + 1][(x - 1 + W) % W] + fire3Buf[y + 1][x] + fire3Buf[y + 1][(x + 1) % W]) / 3.08;
+	const lines: string[] = [];
+	for (let row = 0; row < 3; row++) {
+		let line = "";
+		for (let x = 0; x < W; x++) {
+			const v = Math.min(1, Math.max(0, fire3Buf[row][x]));
+			const ci = Math.floor(v * (fireChars.length - 1));
+			const pi = Math.floor(v * (firePalette.length - 1));
+			const [r, g, b] = firePalette[pi];
+			line += rgb(r, g, b) + fireChars[ci];
+		}
+		lines.push(line + reset);
+	}
+	return lines;
+};
+
+// ─── 3-LINE: Matrix Rain ─────────────────────────────────────────
+const mat3Drops: { x: number; y: number; speed: number; len: number }[] = [];
+for (let i = 0; i < 25; i++) mat3Drops.push({ x: Math.floor(Math.random() * 50), y: Math.random() * -5, speed: 0.15 + Math.random() * 0.35, len: 2 + Math.floor(Math.random() * 3) });
+export const matrix3: AnimationFn = (f, w) => {
+	const W = Math.min(50, w), H = 3;
+	const grid: string[][] = Array.from({ length: H }, () => new Array(W).fill(rgb(10, 30, 10) + " "));
+	for (const d of mat3Drops) {
+		d.y += d.speed;
+		if (d.y > H + d.len) { d.y = -d.len; d.x = Math.floor(Math.random() * W); d.speed = 0.15 + Math.random() * 0.35; }
+		for (let t = 0; t < d.len; t++) {
+			const row = Math.floor(d.y - t);
+			if (row >= 0 && row < H && d.x < W) {
+				const ch = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+				const brightness = t === 0 ? 255 : Math.max(40, 200 - t * 60);
+				grid[row][d.x] = (t === 0 ? bold : "") + rgb(0, brightness, 0) + ch + (t === 0 ? nobold : "");
+			}
+		}
+	}
+	return grid.map(row => row.join("") + reset);
+};
+
+// ─── 3-LINE: Starfield ───────────────────────────────────────────
+const stars3: { x: number; y: number; speed: number; ch: string; bright: number }[] = [];
+for (let i = 0; i < 40; i++) {
+	const speed = 0.15 + Math.random() * 1.0;
+	const layer = Math.floor(speed / 0.25);
+	stars3.push({ x: Math.random() * 55, y: Math.floor(Math.random() * 3), speed, ch: starChars[Math.min(layer, starChars.length - 1)], bright: Math.min(255, 60 + layer * 40) });
+}
+export const starfield3: AnimationFn = (f, w) => {
+	const W = Math.min(55, w), H = 3;
+	const grid: string[][] = Array.from({ length: H }, () => new Array(W).fill(" "));
+	for (const s of stars3) {
+		const xi = Math.floor(s.x);
+		if (xi >= 0 && xi < W && s.y < H) grid[s.y][xi] = rgb(s.bright, s.bright, Math.min(255, s.bright + 40)) + s.ch;
+		s.x += s.speed;
+		if (s.x >= W) { s.x = 0; s.y = Math.floor(Math.random() * 3); s.speed = 0.15 + Math.random() * 1.0; const l = Math.floor(s.speed / 0.25); s.bright = Math.min(255, 60 + l * 40); s.ch = starChars[Math.min(l, starChars.length - 1)]; }
+	}
+	return grid.map(row => row.join("") + reset);
+};
+
+// ─── 3-LINE: Aurora ──────────────────────────────────────────────
+export const aurora3: AnimationFn = (f, w) => {
+	const W = Math.min(55, w), H = 3;
+	const auroraChars = " ░▒▓█▓▒░";
+	const lines: string[] = [];
+	for (let y = 0; y < H; y++) {
+		let line = "";
+		for (let x = 0; x < W; x++) {
+			const v1 = Math.sin(x * 0.08 + f * 0.04 + y * 1.2);
+			const v2 = Math.sin(x * 0.12 - f * 0.03 + y * 0.8);
+			const v3 = Math.sin((x + y * 10) * 0.06 + f * 0.05);
+			const n = (v1 + v2 + v3 + 3) / 6;
+			const hue = (x * 3 + f * 2 + y * 40) % 360;
+			const sat = 0.7 + n * 0.3;
+			const lum = 0.15 + n * 0.45;
+			const ci = Math.floor(n * (auroraChars.length - 1));
+			line += hsl(hue, sat, lum) + auroraChars[ci];
+		}
+		lines.push(line + reset);
+	}
+	return lines;
+};
+
 // ─── Registry ────────────────────────────────────────────────────
 export type AnimCategory = "thinking" | "working" | "both";
 
@@ -361,26 +446,33 @@ export interface AnimationDef {
 	fn: AnimationFn;
 	category: AnimCategory;
 	description: string;
+	lines: number;
 }
 
 export const ANIMATIONS: AnimationDef[] = [
-	{ name: "neural-pulse", fn: neuralPulse, category: "thinking", description: "Energy pulses along neural pathway" },
-	{ name: "glitch-text", fn: glitchText, category: "both", description: "Cyberpunk glitch effect" },
-	{ name: "plasma-wave", fn: plasmaWave, category: "thinking", description: "Colorful plasma band" },
-	{ name: "pacman", fn: pacmanChase, category: "working", description: "Pac-Man eating dots" },
-	{ name: "matrix", fn: matrixRain, category: "both", description: "Matrix rain" },
-	{ name: "pipeline", fn: pipeline, category: "working", description: "CI/CD pipeline with icons" },
-	{ name: "starfield", fn: starfield, category: "thinking", description: "Horizontal parallax stars" },
-	{ name: "fire", fn: fire, category: "working", description: "Demoscene fire" },
-	{ name: "icon-morph", fn: iconMorphing, category: "both", description: "Morphing nerd font icons" },
-	{ name: "brainstorm", fn: brainstorm, category: "thinking", description: "Weather icon storm" },
-	{ name: "dev-constellation", fn: devConstellation, category: "thinking", description: "Dev icons with pulses" },
-	{ name: "crush", fn: crushScramble, category: "both", description: "Crush-style scrambler" },
-	{ name: "pi-pulse", fn: piLogoPulse, category: "both", description: "Pi logo with gradient pulse" },
-	{ name: "shimmer", fn: shimmerText, category: "thinking", description: "Rainbow shimmer text" },
-	{ name: "typewriter", fn: vibeTypewriter, category: "both", description: "Themed typewriter text" },
-	{ name: "orbit-dots", fn: orbitDots, category: "thinking", description: "Pulsing orbit dots" },
-	{ name: "neon-bounce", fn: neonBounce, category: "working", description: "Neon ball bouncing" },
+	// 1-line
+	{ name: "neural-pulse", fn: neuralPulse, category: "thinking", description: "Energy pulses along neural pathway", lines: 1 },
+	{ name: "glitch-text", fn: glitchText, category: "both", description: "Cyberpunk glitch effect", lines: 1 },
+	{ name: "plasma-wave", fn: plasmaWave, category: "thinking", description: "Colorful plasma band", lines: 1 },
+	{ name: "pacman", fn: pacmanChase, category: "working", description: "Pac-Man eating dots", lines: 1 },
+	{ name: "matrix", fn: matrixRain, category: "both", description: "Matrix rain", lines: 1 },
+	{ name: "pipeline", fn: pipeline, category: "working", description: "CI/CD pipeline with icons", lines: 1 },
+	{ name: "starfield", fn: starfield, category: "thinking", description: "Horizontal parallax stars", lines: 1 },
+	{ name: "fire", fn: fire, category: "working", description: "Demoscene fire", lines: 1 },
+	{ name: "icon-morph", fn: iconMorphing, category: "both", description: "Morphing nerd font icons", lines: 1 },
+	{ name: "brainstorm", fn: brainstorm, category: "thinking", description: "Weather icon storm", lines: 1 },
+	{ name: "dev-constellation", fn: devConstellation, category: "thinking", description: "Dev icons with pulses", lines: 1 },
+	{ name: "crush", fn: crushScramble, category: "both", description: "Crush-style scrambler", lines: 1 },
+	{ name: "pi-pulse", fn: piLogoPulse, category: "both", description: "Pi logo with gradient pulse", lines: 1 },
+	{ name: "shimmer", fn: shimmerText, category: "thinking", description: "Rainbow shimmer text", lines: 1 },
+	{ name: "typewriter", fn: vibeTypewriter, category: "both", description: "Themed typewriter text", lines: 1 },
+	{ name: "orbit-dots", fn: orbitDots, category: "thinking", description: "Pulsing orbit dots", lines: 1 },
+	{ name: "neon-bounce", fn: neonBounce, category: "working", description: "Neon ball bouncing", lines: 1 },
+	// 3-line
+	{ name: "fire3", fn: fire3, category: "working", description: "🔥 Demoscene fire (3-line)", lines: 3 },
+	{ name: "matrix3", fn: matrix3, category: "both", description: "🟢 Matrix rain (3-line)", lines: 3 },
+	{ name: "starfield3", fn: starfield3, category: "thinking", description: "✦ Deep starfield (3-line)", lines: 3 },
+	{ name: "aurora", fn: aurora3, category: "thinking", description: "🌌 Aurora borealis (3-line)", lines: 3 },
 ];
 
 export function getAnimation(name: string): AnimationDef | undefined {

@@ -39,10 +39,11 @@ function getState(): AnimState {
 	return (globalThis as any)[STATE_KEY];
 }
 
-function renderFrame(animName: string, frame: number, width: number, phase?: AnimPhase): string {
+function renderFrame(animName: string, frame: number, width: number, phase?: AnimPhase): string[] {
 	const anim = getAnimation(animName);
-	if (!anim) return "Working...";
-	return anim.fn(frame, width, phase);
+	if (!anim) return ["Working..."];
+	const result = anim.fn(frame, width, phase);
+	return Array.isArray(result) ? result : [result];
 }
 
 function pickRandom(cat: AnimCategory): string {
@@ -102,12 +103,14 @@ export default function (pi: ExtensionAPI) {
 	ensurePatch();
 
 	// ─── Working animation ───────────────────────────────────────
+	let lastAnimLines = 0; // track if we need to switch between message/widget
+
 	function startWorkingAnimation(ctx: ExtensionContext) {
-		stopWorkingAnimation();
+		stopWorkingAnimation(ctx);
 		if (!state.enabled) return;
 		state.frame = 0;
 		state.currentWorkingCtx = ctx;
-		// Pick initial animations (will switch dynamically based on state)
+		lastAnimLines = 0;
 		const randomWorkingName = state.randomMode ? pickRandom("working") : null;
 		const randomThinkingName = state.randomMode ? pickRandom("thinking") : null;
 		const randomToolName = state.randomMode ? pickRandom("working") : null;
@@ -126,16 +129,30 @@ export default function (pi: ExtensionAPI) {
 				animName = randomWorkingName || state.workingAnim;
 				phase = "working";
 			}
-			const rendered = renderFrame(animName, state.frame, 50, phase);
-			ctx.ui.setWorkingMessage(rendered);
+			const lines = renderFrame(animName, state.frame, 50, phase);
+			if (lines.length === 1) {
+				// Single line: use setWorkingMessage (replaces Loader text)
+				if (lastAnimLines > 1) ctx.ui.setWidget("anim-multi", undefined);
+				ctx.ui.setWorkingMessage(lines[0]);
+				lastAnimLines = 1;
+			} else {
+				// Multi-line: use setWidget
+				if (lastAnimLines <= 1) ctx.ui.setWorkingMessage(undefined);
+				ctx.ui.setWidget("anim-multi", lines);
+				lastAnimLines = lines.length;
+			}
 		}, 60);
 	}
 
-	function stopWorkingAnimation() {
+	function stopWorkingAnimation(ctx?: ExtensionContext) {
 		if (state.workingTimer) {
 			clearInterval(state.workingTimer);
 			state.workingTimer = null;
 		}
+		if (lastAnimLines > 1 && ctx) {
+			ctx.ui.setWidget("anim-multi", undefined);
+		}
+		lastAnimLines = 0;
 		state.currentWorkingCtx = null;
 	}
 
@@ -145,8 +162,10 @@ export default function (pi: ExtensionAPI) {
 		state.thinkingTimer = setInterval(() => {
 			state.frame++;
 			const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
+			const lines = renderFrame(animName, state.frame, 60, "thinking");
 			for (const [, label] of state.thinkingLabels) {
-				label.setText(renderFrame(animName, state.frame, 60, "thinking"));
+				// Thinking labels are always single-line Text components
+				label.setText(lines[0]);
 			}
 		}, 60);
 	}
@@ -171,7 +190,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("agent_end", async (_e, ctx) => {
 		state.isThinking = false;
 		state.isToolRunning = false;
-		stopWorkingAnimation();
+		stopWorkingAnimation(ctx);
 		stopThinkingTicker();
 		ctx.ui.setWorkingMessage(); // restore default
 	});
@@ -208,7 +227,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_switch", async (_e, ctx) => {
-		stopWorkingAnimation();
+		stopWorkingAnimation(ctx);
 		stopThinkingTicker();
 		ctx.ui.setWorkingMessage();
 	});
@@ -255,22 +274,23 @@ export default function (pi: ExtensionAPI) {
 					},
 					render(width: number): string[] {
 						const anim = ANIMATIONS[idx];
-						const rendered = anim.fn(frame, Math.min(50, width - 4));
-						const lines: string[] = [];
-						lines.push("");
-						lines.push(theme.fg("accent", "  ▶ Animation Showcase"));
-						lines.push("");
-						lines.push(`  ${rendered}`);
-						lines.push("");
-						lines.push(
+						const raw = anim.fn(frame, Math.min(50, width - 4));
+						const rendered = Array.isArray(raw) ? raw : [raw];
+						const out: string[] = [];
+						out.push("");
+						out.push(theme.fg("accent", "  ▶ Animation Showcase"));
+						out.push("");
+						for (const line of rendered) out.push(`  ${line}`);
+						out.push("");
+						out.push(
 							theme.fg("muted", `  [${idx + 1}/${ANIMATIONS.length}] `) +
 							theme.fg("text", anim.name) +
-							theme.fg("muted", ` (${anim.category}) — ${anim.description}`)
+							theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
 						);
-						lines.push("");
-						lines.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
-						lines.push("");
-						return lines;
+						out.push("");
+						out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
+						out.push("");
+						return out;
 					},
 				};
 			}).then((selectedName) => {
