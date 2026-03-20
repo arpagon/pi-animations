@@ -27,7 +27,7 @@ Replace pi's default spinner with 21 terminal animations — from demoscene fire
 git clone https://github.com/arpagon/pi-animations.git
 
 # Run pi with the extension
-pi -e ./pi-animations/extension/index.ts
+pi -e ./pi-animations/animations.ts
 ```
 
 Or add to `~/.pi/agent/agent.json`:
@@ -35,7 +35,7 @@ Or add to `~/.pi/agent/agent.json`:
 ```json
 {
   "extensions": [
-    "path/to/pi-animations/extension/index.ts"
+    "path/to/pi-animations/animations.ts"
   ]
 }
 ```
@@ -186,10 +186,8 @@ tmux attach -t pi-anims
 
 ```
 pi-animations/
-├── extension/
-│   ├── index.ts          Entry point: events, /animation command, monkey-patch
-│   ├── animations.ts     21 animation renderers as pure functions
-│   └── package.json
+├── animations.ts         Extension: 21 animations + /animation command
+├── package.json
 ├── explorations/         Standalone animation demos (bun run)
 ├── tmux-demo.sh          Launch all demos in tmux
 ├── AGENTS.md             Agent context
@@ -198,7 +196,7 @@ pi-animations/
 
 ### Adding a new animation
 
-1. Add a renderer function in `extension/animations.ts`:
+1. Add a renderer function in `animations.ts`:
 
 ```typescript
 export const myAnimation: AnimationFn = (frame, width, phase?) => {

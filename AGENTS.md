@@ -4,16 +4,14 @@ Animated thinking/working/tool indicators for pi coding agent.
 
 ## Structure
 
-- `extension/` — pi extension (the product)
-  - `index.ts` — entry point: events, `/animation` command, AssistantMessageComponent patch
-  - `animations.ts` — 21 animation renderers as pure functions
+- `animations.ts` — single-file extension: 21 animations + `/animation` command + AssistantMessageComponent patch
 - `explorations/` — standalone demos (`bun run explorations/XX-name.ts`)
 - `tmux-demo.sh` — launch all demos in tmux
 
 ## Quick start
 
 ```bash
-pi -e ./extension/index.ts
+pi -e ./animations.ts
 /animation showcase    # browse all
 /animation fire3       # set all states
 ```

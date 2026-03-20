@@ -1,7 +1,25 @@
 /**
- * Animation renderers — each returns a single ANSI-colored string per frame.
- * All animations are pure functions: (frame, width, theme?) => string
+ * pi-animations — Animated thinking/working/tool indicators for pi
+ *
+ * Usage:
+ *   pi -e ./animations.ts
+ *
+ * Commands:
+ *   /animation                  Show status + list
+ *   /animation showcase         Interactive browser
+ *   /animation <name>           Set all states
+ *   /animation working:<name>   Set working only
+ *   /animation thinking:<name>  Set thinking only
+ *   /animation tool:<name>      Set tool only
+ *   /animation width full|default|<n>
+ *   /animation on|off|random
  */
+
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { AssistantMessageComponent, getAgentDir } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const rgb = (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`;
 const bold = "\x1b[1m";
@@ -39,8 +57,8 @@ function lerpGrad(grad: number[][], t: number): [number, number, number] {
 
 const ellipsis = (f: number) => [".", "..", "...", ""][Math.floor(f / 10) % 4];
 
-export type AnimPhase = "thinking" | "working" | "tool";
-export type AnimationFn = (frame: number, width: number, phase?: AnimPhase) => string | string[];
+type AnimPhase = "thinking" | "working" | "tool";
+type AnimationFn = (frame: number, width: number, phase?: AnimPhase) => string | string[];
 
 const PHASE_LABELS: Record<AnimPhase, string> = {
 	thinking: "Thinking",
@@ -49,7 +67,7 @@ const PHASE_LABELS: Record<AnimPhase, string> = {
 };
 
 // ─── 02 Neural Pulse ─────────────────────────────────────────────
-export const neuralPulse: AnimationFn = (f, w) => {
+const neuralPulse: AnimationFn = (f, w) => {
 	const N = Math.min(14, Math.floor(w / 4));
 	const d = rgb(60, 60, 80);
 	const pulse = [rgb(80, 80, 120), rgb(120, 100, 200), rgb(180, 140, 255), rgb(220, 180, 255), rgb(255, 220, 255), rgb(220, 180, 255), rgb(180, 140, 255)];
@@ -64,7 +82,7 @@ export const neuralPulse: AnimationFn = (f, w) => {
 };
 
 // ─── 03 Glitch Text ──────────────────────────────────────────────
-export const glitchText: AnimationFn = (f, _w, phase) => {
+const glitchText: AnimationFn = (f, _w, phase) => {
 	const text = PHASE_LABELS[phase || "thinking"];
 	const glyphs = "█▓▒░╳╱╲¥£€$#@!?&%~*";
 	const colors = [rgb(0, 255, 200), rgb(255, 0, 100), rgb(100, 200, 255), rgb(255, 255, 0)];
@@ -79,7 +97,7 @@ export const glitchText: AnimationFn = (f, _w, phase) => {
 };
 
 // ─── 05 Plasma Wave (1-line) ─────────────────────────────────────
-export const plasmaWave: AnimationFn = (f, w) => {
+const plasmaWave: AnimationFn = (f, w) => {
 	const chars = " ·∘○◎●◉█";
 	const W = w;
 	let line = "";
@@ -95,7 +113,7 @@ export const plasmaWave: AnimationFn = (f, w) => {
 };
 
 // ─── 06 Pac-Man Chase ────────────────────────────────────────────
-export const pacmanChase: AnimationFn = (f, w) => {
+const pacmanChase: AnimationFn = (f, w) => {
 	const W = Math.min(40, w);
 	const pac = [rgb(255, 255, 0) + "ᗧ", rgb(255, 255, 0) + "●"];
 	const ghost = rgb(255, 80, 80) + "ᗣ";
@@ -116,7 +134,7 @@ export const pacmanChase: AnimationFn = (f, w) => {
 let matrixDrops: { x: number; phase: number; speed: number }[] = [];
 let matrixLastW = 0;
 const matrixChars = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘ012789Z";
-export const matrixRain: AnimationFn = (f, w) => {
+const matrixRain: AnimationFn = (f, w) => {
 	const W = w;
 	if (W !== matrixLastW) {
 		const count = Math.max(15, Math.floor(W * 0.4));
@@ -134,7 +152,7 @@ export const matrixRain: AnimationFn = (f, w) => {
 };
 
 // ─── 08 Pipeline ─────────────────────────────────────────────────
-export const pipeline: AnimationFn = (f) => {
+const pipeline: AnimationFn = (f) => {
 	const icons = [
 		{ i: "\uf0e7", c: rgb(255, 200, 50) }, { i: "\uf013", c: rgb(100, 180, 255) },
 		{ i: "\uf121", c: rgb(150, 255, 150) }, { i: "\uf0ad", c: rgb(255, 150, 100) }, { i: "\uf00c", c: rgb(100, 255, 200) }
@@ -165,7 +183,7 @@ function ensureStars(W: number) {
 		starsLastW = W;
 	}
 }
-export const starfield: AnimationFn = (f, w) => {
+const starfield: AnimationFn = (f, w) => {
 	const W = w;
 	ensureStars(W);
 	const buf = new Array(W).fill(" ");
@@ -183,7 +201,7 @@ const fireChars = " .:-=+*#%@█";
 const firePalette = [[0, 0, 0], [50, 0, 0], [120, 30, 0], [200, 80, 0], [240, 160, 30], [255, 230, 120], [255, 255, 200]];
 let fireBuf: Float64Array[] = [];
 let fireLastW = 0;
-export const fire: AnimationFn = (f, w) => {
+const fire: AnimationFn = (f, w) => {
 	const W = w;
 	if (W !== fireLastW) { fireBuf = Array.from({ length: 4 }, () => new Float64Array(W)); fireLastW = W; }
 	for (let x = 0; x < W; x++) fireBuf[3][x] = Math.random() > 0.35 ? 1 : Math.random() * 0.5;
@@ -208,7 +226,7 @@ const morphIcons = [
 	{ ch: "\uf0ac", r: 100, g: 200, b: 255 }, { ch: "\uf004", r: 255, g: 80, b: 120 }
 ];
 const trans = "░▒▓█▓▒░";
-export const iconMorphing: AnimationFn = (f) => {
+const iconMorphing: AnimationFn = (f) => {
 	const cd = 25, pos = f % (morphIcons.length * cd);
 	const ci = Math.floor(pos / cd), ni = (ci + 1) % morphIcons.length, p = (pos % cd) / cd;
 	const cur = morphIcons[ci], nxt = morphIcons[ni];
@@ -228,7 +246,7 @@ const weatherPhases = [
 	{ icon: "\ue30b", label: "insight!", r: 255, g: 220, b: 100 },
 	{ icon: "\ue302", label: "processing", r: 160, g: 160, b: 190 }
 ];
-export const brainstorm: AnimationFn = (f) => {
+const brainstorm: AnimationFn = (f) => {
 	const pd = 35, pos = f % (weatherPhases.length * pd), pi = Math.floor(pos / pd), p = weatherPhases[pi];
 	const glow = Math.sin(f * 0.15) * 30;
 	const r = Math.min(255, Math.max(0, p.r + glow)), g = Math.min(255, Math.max(0, p.g + glow)), b = Math.min(255, Math.max(0, p.b + glow));
@@ -242,7 +260,7 @@ const devNodes = [
 	{ ch: "\ue796", c: [50, 150, 255] }, { ch: "\ue718", c: [80, 200, 120] }, { ch: "\ue73c", c: [255, 200, 50] },
 	{ ch: "\ue7a8", c: [200, 100, 255] }, { ch: "\uf13b", c: [100, 200, 255] }, { ch: "\ue61e", c: [255, 100, 100] }
 ];
-export const devConstellation: AnimationFn = (f) => {
+const devConstellation: AnimationFn = (f) => {
 	const gap = 5, totalW = devNodes.length * (gap + 1) - 1, pp = (f * 0.4) % totalW;
 	let line = "";
 	for (let i = 0; i < devNodes.length; i++) {
@@ -258,7 +276,7 @@ const scrambleChars = "0123456789abcdefABCDEF~!@#$£€%^&*()+=_";
 const scrambleBirths = Array.from({ length: 15 }, () => Math.random() * 20);
 const scrambleRamp: number[][] = [];
 for (let i = 0; i < 24; i++) { const t = i / 24, a = t * Math.PI * 2; scrambleRamp.push([Math.round(Math.sin(a) * 127 + 128), Math.round(Math.sin(a + 2.094) * 80 + 80), Math.round(Math.sin(a + 4.189) * 127 + 128)]); }
-export const crushScramble: AnimationFn = (f, _w, phase) => {
+const crushScramble: AnimationFn = (f, _w, phase) => {
 	const sw = 15, init = f > 20;
 	let line = "";
 	for (let i = 0; i < sw; i++) {
@@ -272,7 +290,7 @@ export const crushScramble: AnimationFn = (f, _w, phase) => {
 };
 
 // ─── 21 Pi Logo Pulse ────────────────────────────────────────────
-export const piLogoPulse: AnimationFn = (f) => {
+const piLogoPulse: AnimationFn = (f) => {
 	const piGlyph = "\ue22c", label = "";
 	const breath = (Math.sin(f * 0.08) + 1) / 2;
 	const gi = Math.floor((f * 0.3) % PI_GRAD.length);
@@ -293,7 +311,7 @@ export const piLogoPulse: AnimationFn = (f) => {
 };
 
 // ─── 22 Shimmer Text ─────────────────────────────────────────────
-export const shimmerText: AnimationFn = (f, _w, phase) => {
+const shimmerText: AnimationFn = (f, _w, phase) => {
 	const text = PHASE_LABELS[phase || "thinking"] + "...";
 	const base = [200, 200, 200];
 	let line = "";
@@ -320,7 +338,7 @@ const vibeMessages = [
 const cursorChars = ["✦", "✧", "⚡", "★", "·"];
 const cursorColors = [[255, 220, 100], [100, 200, 255], [255, 100, 200], [200, 255, 100]];
 let vibeIdx = 0, vibeCharIdx = 0, vibeHold = 0;
-export const vibeTypewriter: AnimationFn = (f) => {
+const vibeTypewriter: AnimationFn = (f) => {
 	const vibe = vibeMessages[vibeIdx];
 	if (vibeHold > 0) { vibeHold--; if (vibeHold === 0) { vibeIdx = (vibeIdx + 1) % vibeMessages.length; vibeCharIdx = 0; } }
 	else if (vibeCharIdx < vibe.length) vibeCharIdx++;
@@ -333,7 +351,7 @@ export const vibeTypewriter: AnimationFn = (f) => {
 
 // ─── 26 Orbit Dots ───────────────────────────────────────────────
 const dotChars = ["·", "∘", "○", "●", "◉", "●", "○", "∘"];
-export const orbitDots: AnimationFn = (f, _w, phase) => {
+const orbitDots: AnimationFn = (f, _w, phase) => {
 	let line = "";
 	for (let i = 0; i < 5; i++) {
 		const phase = Math.sin(f * 0.12 - i * 0.8), norm = (phase + 1) / 2;
@@ -351,7 +369,7 @@ export const orbitDots: AnimationFn = (f, _w, phase) => {
 // ─── 27 Neon Bounce ──────────────────────────────────────────────
 const bounceTrail: { pos: number; age: number; color: number[] }[] = [];
 const trailGlyphs = ["█", "▓", "▒", "░", "·"];
-export const neonBounce: AnimationFn = (f, w) => {
+const neonBounce: AnimationFn = (f, w) => {
 	const W = w;
 	const cycle = (f * 0.6) % (W * 2), pos = Math.floor(cycle < W ? cycle : W * 2 - cycle);
 	const [r, g, b] = lerpGrad(PI_GRAD, pos / W);
@@ -372,7 +390,7 @@ export const neonBounce: AnimationFn = (f, w) => {
 // ─── 3-LINE: Fire ────────────────────────────────────────────────
 let fire3Buf: Float64Array[] = [];
 let fire3LastW = 0;
-export const fire3: AnimationFn = (f, w) => {
+const fire3: AnimationFn = (f, w) => {
 	const W = w;
 	if (W !== fire3LastW) { fire3Buf = Array.from({ length: 5 }, () => new Float64Array(W)); fire3LastW = W; }
 	for (let x = 0; x < W; x++) fire3Buf[4][x] = Math.random() > 0.3 ? 1 : Math.random() * 0.5;
@@ -396,7 +414,7 @@ export const fire3: AnimationFn = (f, w) => {
 // ─── 3-LINE: Matrix Rain ─────────────────────────────────────────
 let mat3Drops: { x: number; y: number; speed: number; len: number }[] = [];
 let mat3LastW = 0;
-export const matrix3: AnimationFn = (f, w) => {
+const matrix3: AnimationFn = (f, w) => {
 	const W = w, H = 3;
 	if (W !== mat3LastW) {
 		const count = Math.max(20, Math.floor(W * 0.5));
@@ -422,7 +440,7 @@ export const matrix3: AnimationFn = (f, w) => {
 // ─── 3-LINE: Starfield ───────────────────────────────────────────
 let stars3: { x: number; y: number; speed: number; ch: string; bright: number }[] = [];
 let stars3LastW = 0;
-export const starfield3: AnimationFn = (f, w) => {
+const starfield3: AnimationFn = (f, w) => {
 	const W = w, H = 3;
 	if (W !== stars3LastW) {
 		const count = Math.max(30, Math.floor(W * 0.7));
@@ -444,7 +462,7 @@ export const starfield3: AnimationFn = (f, w) => {
 };
 
 // ─── 3-LINE: Aurora ──────────────────────────────────────────────
-export const aurora3: AnimationFn = (f, w) => {
+const aurora3: AnimationFn = (f, w) => {
 	const W = w, H = 3;
 	const auroraChars = " ░▒▓█▓▒░";
 	const lines: string[] = [];
@@ -467,9 +485,9 @@ export const aurora3: AnimationFn = (f, w) => {
 };
 
 // ─── Registry ────────────────────────────────────────────────────
-export type AnimCategory = "thinking" | "working" | "both";
+type AnimCategory = "thinking" | "working" | "both";
 
-export interface AnimationDef {
+interface AnimationDef {
 	name: string;
 	fn: AnimationFn;
 	category: AnimCategory;
@@ -477,7 +495,7 @@ export interface AnimationDef {
 	lines: number;
 }
 
-export const ANIMATIONS: AnimationDef[] = [
+const ANIMATIONS: AnimationDef[] = [
 	// 1-line
 	{ name: "neural-pulse", fn: neuralPulse, category: "thinking", description: "Energy pulses along neural pathway", lines: 1 },
 	{ name: "glitch-text", fn: glitchText, category: "both", description: "Cyberpunk glitch effect", lines: 1 },
@@ -503,10 +521,487 @@ export const ANIMATIONS: AnimationDef[] = [
 	{ name: "aurora", fn: aurora3, category: "thinking", description: "🌌 Aurora borealis (3-line)", lines: 3 },
 ];
 
-export function getAnimation(name: string): AnimationDef | undefined {
+function getAnimation(name: string): AnimationDef | undefined {
 	return ANIMATIONS.find(a => a.name === name);
 }
 
-export function getAnimationsForCategory(cat: AnimCategory): AnimationDef[] {
+function getAnimationsForCategory(cat: AnimCategory): AnimationDef[] {
 	return ANIMATIONS.filter(a => a.category === cat || a.category === "both");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Extension entry point
+// ═══════════════════════════════════════════════════════════════
+
+const STATE_KEY = Symbol.for("pi.ext.animatedThinking.state");
+const CONFIG_NAME = "pi-tui-animations.json";
+
+// ─── Config persistence ─────────────────────────────────────────
+interface AnimConfig {
+	workingAnim?: string;
+	thinkingAnim?: string;
+	toolAnim?: string;
+	width?: "full" | "default" | number;
+	randomMode?: boolean;
+	enabled?: boolean;
+}
+
+function getConfigPath(): string {
+	return join(getAgentDir(), "extensions", CONFIG_NAME);
+}
+
+function loadConfig(): AnimConfig {
+	const path = getConfigPath();
+	if (!existsSync(path)) return {};
+	try {
+		return JSON.parse(readFileSync(path, "utf-8")) as AnimConfig;
+	} catch {
+		return {};
+	}
+}
+
+function saveConfig(config: AnimConfig): void {
+	const dir = join(getAgentDir(), "extensions");
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + "\n");
+}
+
+function resolveWidth(w: "full" | "default" | number | undefined): number {
+	if (w === "full" || w === undefined) return (process.stdout.columns || 80) - 4;
+	if (w === "default") return 50;
+	return Math.max(10, Math.min(w, (process.stdout.columns || 80) - 4));
+}
+
+interface AnimState {
+	workingAnim: string;
+	thinkingAnim: string;
+	toolAnim: string;
+	width: "full" | "default" | number;
+	randomMode: boolean;
+	frame: number;
+	workingTimer: ReturnType<typeof setInterval> | null;
+	thinkingTimer: ReturnType<typeof setInterval> | null;
+	thinkingLabels: Map<string, Text>;
+	theme?: ExtensionContext["ui"]["theme"];
+	enabled: boolean;
+	isThinking: boolean;
+	isToolRunning: boolean;
+	currentWorkingCtx: ExtensionContext | null;
+}
+
+function getState(): AnimState {
+	return (globalThis as any)[STATE_KEY];
+}
+
+function renderFrame(animName: string, frame: number, width: number, phase?: AnimPhase): string[] {
+	const anim = getAnimation(animName);
+	if (!anim) return ["Working..."];
+	const result = anim.fn(frame, width, phase);
+	return Array.isArray(result) ? result : [result];
+}
+
+function pickRandom(cat: AnimCategory): string {
+	const anims = getAnimationsForCategory(cat);
+	return anims[Math.floor(Math.random() * anims.length)].name;
+}
+
+// ─── Thinking patch (monkey-patch AssistantMessageComponent) ─────
+function ensurePatch(): void {
+	const proto: any = AssistantMessageComponent.prototype as any;
+	if (proto[PATCH_KEY]) return;
+	proto[PATCH_KEY] = true;
+
+	const original = proto.updateContent;
+	proto.updateContent = function patchedUpdateContent(this: any, message: any) {
+		original.call(this, message);
+		try {
+			const state = getState();
+			if (!state?.enabled) return;
+			if (!message?.content || !Array.isArray(message.content)) return;
+			if (!this.hideThinkingBlock) return;
+			if (!this.contentContainer?.children) return;
+
+			// Find Text components with "Thinking..."
+			for (const child of this.contentContainer.children as any[]) {
+				if (!child || typeof child.setText !== "function") continue;
+				if (typeof child.text !== "string" || !child.text.includes("Thinking")) continue;
+
+				const key = `${message.timestamp}`;
+				state.thinkingLabels.set(key, child as Text);
+
+				// Render animated frame
+				const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
+				child.setText(renderFrame(animName, state.frame, 60));
+			}
+		} catch { /* never break rendering */ }
+	};
+}
+
+export default function (pi: ExtensionAPI) {
+	const cfg = loadConfig();
+	const state: AnimState = {
+		workingAnim: cfg.workingAnim || "crush",
+		thinkingAnim: cfg.thinkingAnim || "shimmer",
+		toolAnim: cfg.toolAnim || "pipeline",
+		width: cfg.width ?? "full",
+		randomMode: cfg.randomMode ?? false,
+		enabled: cfg.enabled ?? true,
+		frame: 0,
+		workingTimer: null,
+		thinkingTimer: null,
+		thinkingLabels: new Map(),
+		theme: undefined,
+		isThinking: false,
+		isToolRunning: false,
+		currentWorkingCtx: null,
+	};
+	(globalThis as any)[STATE_KEY] = state;
+	ensurePatch();
+
+	function persistConfig() {
+		saveConfig({
+			workingAnim: state.workingAnim,
+			thinkingAnim: state.thinkingAnim,
+			toolAnim: state.toolAnim,
+			width: state.width,
+			randomMode: state.randomMode,
+			enabled: state.enabled,
+		});
+	}
+
+	// ─── Working animation ───────────────────────────────────────
+	let lastAnimLines = 0; // track if we need to switch between message/widget
+
+	function startWorkingAnimation(ctx: ExtensionContext) {
+		stopWorkingAnimation(ctx);
+		if (!state.enabled) return;
+		state.frame = 0;
+		state.currentWorkingCtx = ctx;
+		lastAnimLines = 0;
+		const randomWorkingName = state.randomMode ? pickRandom("working") : null;
+		const randomThinkingName = state.randomMode ? pickRandom("thinking") : null;
+		const randomToolName = state.randomMode ? pickRandom("working") : null;
+		state.workingTimer = setInterval(() => {
+			state.frame++;
+			// Priority: thinking > tool > working
+			let animName: string;
+			let phase: AnimPhase;
+			if (state.isThinking) {
+				animName = randomThinkingName || state.thinkingAnim;
+				phase = "thinking";
+			} else if (state.isToolRunning) {
+				animName = randomToolName || state.toolAnim;
+				phase = "tool";
+			} else {
+				animName = randomWorkingName || state.workingAnim;
+				phase = "working";
+			}
+			const w = resolveWidth(state.width);
+			const lines = renderFrame(animName, state.frame, w, phase);
+			if (lines.length === 1) {
+				// Single line: use setWorkingMessage (replaces Loader text)
+				if (lastAnimLines > 1) ctx.ui.setWidget("anim-multi", undefined);
+				ctx.ui.setWorkingMessage(lines[0]);
+				lastAnimLines = 1;
+			} else {
+				// Multi-line: use setWidget
+				if (lastAnimLines <= 1) ctx.ui.setWorkingMessage(undefined);
+				ctx.ui.setWidget("anim-multi", lines);
+				lastAnimLines = lines.length;
+			}
+		}, 60);
+	}
+
+	function stopWorkingAnimation(ctx?: ExtensionContext) {
+		if (state.workingTimer) {
+			clearInterval(state.workingTimer);
+			state.workingTimer = null;
+		}
+		if (lastAnimLines > 1 && ctx) {
+			ctx.ui.setWidget("anim-multi", undefined);
+		}
+		lastAnimLines = 0;
+		state.currentWorkingCtx = null;
+	}
+
+	// ─── Thinking animation tick ─────────────────────────────────
+	function startThinkingTicker() {
+		if (state.thinkingTimer) return;
+		state.thinkingTimer = setInterval(() => {
+			state.frame++;
+			const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
+			const lines = renderFrame(animName, state.frame, 60, "thinking");
+			for (const [, label] of state.thinkingLabels) {
+				// Thinking labels are always single-line Text components
+				label.setText(lines[0]);
+			}
+		}, 60);
+	}
+
+	function stopThinkingTicker() {
+		if (state.thinkingTimer) {
+			clearInterval(state.thinkingTimer);
+			state.thinkingTimer = null;
+		}
+		state.thinkingLabels.clear();
+	}
+
+	// ─── Events ──────────────────────────────────────────────────
+	pi.on("session_start", async (_e, ctx) => {
+		state.theme = ctx.ui.theme;
+	});
+
+	pi.on("agent_start", async (_e, ctx) => {
+		startWorkingAnimation(ctx);
+	});
+
+	pi.on("agent_end", async (_e, ctx) => {
+		state.isThinking = false;
+		state.isToolRunning = false;
+		stopWorkingAnimation(ctx);
+		stopThinkingTicker();
+		ctx.ui.setWorkingMessage(); // restore default
+	});
+
+	pi.on("message_update", async (event, ctx) => {
+		state.theme = ctx.ui.theme;
+		const se = event.assistantMessageEvent as any;
+		if (!se || typeof se.type !== "string") return;
+		if (se.type === "thinking_start" || se.type === "thinking_delta") {
+			state.isThinking = true;
+			if (state.enabled) startThinkingTicker();
+		}
+		if (se.type === "thinking_end") {
+			state.isThinking = false;
+			// Keep label with final frame
+		}
+		if (se.type === "text_delta") {
+			// Content started flowing, no longer thinking
+			state.isThinking = false;
+		}
+	});
+
+	pi.on("message_end", async () => {
+		state.isThinking = false;
+		stopThinkingTicker();
+	});
+
+	pi.on("tool_execution_start", async () => {
+		state.isToolRunning = true;
+	});
+
+	pi.on("tool_execution_end", async () => {
+		state.isToolRunning = false;
+	});
+
+	pi.on("session_switch", async (_e, ctx) => {
+		stopWorkingAnimation(ctx);
+		stopThinkingTicker();
+		ctx.ui.setWorkingMessage();
+	});
+
+	pi.on("session_shutdown", async () => {
+		stopWorkingAnimation();
+		stopThinkingTicker();
+	});
+
+	// ─── Showcase (used by /animation showcase) ─────────────────
+	async function runShowcase(ctx: ExtensionContext) {
+		await ctx.ui.custom((tui, theme, _keybindings, done) => {
+			let idx = 0;
+			let frame = 0;
+
+			const timer = setInterval(() => {
+				frame++;
+				tui.requestRender();
+			}, 50);
+
+			return {
+				invalidate() {},
+				dispose() { clearInterval(timer); },
+				handleInput(data: string) {
+					if (data === "\x1b" || data === "q") {
+						clearInterval(timer);
+						done(null);
+					} else if (data === "\x1b[C" || data === "l" || data === "n") {
+						idx = (idx + 1) % ANIMATIONS.length;
+						frame = 0;
+					} else if (data === "\x1b[D" || data === "h" || data === "p") {
+						idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
+						frame = 0;
+					} else if (data === "\r" || data === " ") {
+						clearInterval(timer);
+						done(ANIMATIONS[idx].name);
+					}
+				},
+				render(width: number): string[] {
+					const anim = ANIMATIONS[idx];
+					const w = resolveWidth(state.width);
+					const raw = anim.fn(frame, Math.min(w, width - 4));
+					const rendered = Array.isArray(raw) ? raw : [raw];
+					const out: string[] = [];
+					out.push("");
+					out.push(theme.fg("accent", "  ▶ Animation Showcase"));
+					out.push("");
+					for (const line of rendered) out.push(`  ${line}`);
+					out.push("");
+					out.push(
+						theme.fg("muted", `  [${idx + 1}/${ANIMATIONS.length}] `) +
+						theme.fg("text", anim.name) +
+						theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
+					);
+					out.push("");
+					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
+					out.push("");
+					return out;
+				},
+			};
+		}).then((selectedName) => {
+			if (selectedName) {
+				state.enabled = true;
+				state.randomMode = false;
+				state.workingAnim = selectedName;
+				state.thinkingAnim = selectedName;
+				state.toolAnim = selectedName;
+				persistConfig();
+				ctx.ui.notify(`Animation set to: ${selectedName} (all states)`, "info");
+			}
+		});
+	}
+
+	// ─── Single /animation command ───────────────────────────────
+	pi.registerCommand("animation", {
+		description: "Animated indicators: showcase, set <name>, width, on/off",
+		getArgumentCompletions: (prefix) => {
+			const items = [
+				// Subcommands
+				{ value: "showcase", label: "showcase", description: "Browse all animations interactively" },
+				{ value: "on", label: "on", description: "Enable animations" },
+				{ value: "off", label: "off", description: "Disable animations" },
+				{ value: "random", label: "random", description: "Random animation each time" },
+				// Width
+				{ value: "width full", label: "width full", description: "Full terminal width" },
+				{ value: "width default", label: "width default", description: "50 columns" },
+				// Direct set (all states)
+				...ANIMATIONS.map(a => ({
+					value: a.name,
+					label: a.name,
+					description: `[${a.category}, ${a.lines}L] ${a.description}`,
+				})),
+				// Per-state
+				...ANIMATIONS.map(a => ({
+					value: `working:${a.name}`,
+					label: `working:${a.name}`,
+					description: `Working → ${a.description}`,
+				})),
+				...ANIMATIONS.map(a => ({
+					value: `thinking:${a.name}`,
+					label: `thinking:${a.name}`,
+					description: `Thinking → ${a.description}`,
+				})),
+				...ANIMATIONS.map(a => ({
+					value: `tool:${a.name}`,
+					label: `tool:${a.name}`,
+					description: `Tool → ${a.description}`,
+				})),
+			];
+			if (!prefix) return items;
+			return items.filter(i => i.value.startsWith(prefix));
+		},
+		handler: async (args, ctx) => {
+			const arg = args.trim().toLowerCase();
+
+			// ── No args: show status ──
+			if (!arg) {
+				const status = state.enabled
+					? `Working: ${state.workingAnim}  •  Thinking: ${state.thinkingAnim}  •  Tool: ${state.toolAnim}  •  Width: ${state.width}${state.randomMode ? "  •  (random)" : ""}`
+					: "Animations disabled";
+				const list = ANIMATIONS.map(a =>
+					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)} ${a.lines}L] ${a.description}`
+				).join("\n");
+				ctx.ui.notify(`${status}\n\nAnimations:\n${list}\n\nUsage:\n  /animation showcase          Browse & pick\n  /animation <name>            Set all states\n  /animation working:<name>    Set working only\n  /animation thinking:<name>   Set thinking only\n  /animation tool:<name>       Set tool only\n  /animation width full|default|<n>\n  /animation on|off|random`, "info");
+				return;
+			}
+
+			// ── showcase ──
+			if (arg === "showcase") {
+				await runShowcase(ctx);
+				return;
+			}
+
+			// ── on/off/random ──
+			if (arg === "off") {
+				state.enabled = false;
+				stopWorkingAnimation();
+				stopThinkingTicker();
+				ctx.ui.setWorkingMessage();
+				persistConfig();
+				ctx.ui.notify("Animations disabled", "info");
+				return;
+			}
+			if (arg === "on") {
+				state.enabled = true;
+				state.randomMode = false;
+				persistConfig();
+				ctx.ui.notify(`Animations enabled`, "info");
+				return;
+			}
+			if (arg === "random") {
+				state.enabled = true;
+				state.randomMode = true;
+				persistConfig();
+				ctx.ui.notify("Random mode enabled", "info");
+				return;
+			}
+
+			// ── width ──
+			if (arg.startsWith("width")) {
+				const val = arg.slice(5).trim();
+				if (!val) {
+					ctx.ui.notify(`Width: ${state.width}`, "info");
+					return;
+				}
+				if (val === "full") {
+					state.width = "full";
+				} else if (val === "default") {
+					state.width = "default";
+				} else {
+					const n = parseInt(val, 10);
+					if (isNaN(n) || n < 10) {
+						ctx.ui.notify("Width: full | default | number >= 10", "error");
+						return;
+					}
+					state.width = n;
+				}
+				persistConfig();
+				ctx.ui.notify(`Width set to: ${state.width}`, "info");
+				return;
+			}
+
+			// ── Set animation: "name" or "working:name" etc ──
+			let target: "all" | "working" | "thinking" | "tool" = "all";
+			let name = arg;
+			if (arg.startsWith("working:")) { target = "working"; name = arg.slice(8); }
+			else if (arg.startsWith("thinking:")) { target = "thinking"; name = arg.slice(9); }
+			else if (arg.startsWith("tool:")) { target = "tool"; name = arg.slice(5); }
+
+			const anim = getAnimation(name);
+			if (!anim) {
+				ctx.ui.notify(`Unknown: "${name}". Try /animation showcase`, "error");
+				return;
+			}
+
+			state.enabled = true;
+			state.randomMode = false;
+			if (target === "all" || target === "working") state.workingAnim = name;
+			if (target === "all" || target === "thinking") state.thinkingAnim = name;
+			if (target === "all" || target === "tool") state.toolAnim = name;
+			persistConfig();
+
+			const msg = target === "all"
+				? `All → ${name}`
+				: `${target} → ${name}`;
+			ctx.ui.notify(msg, "info");
+		},
+	});
 }
