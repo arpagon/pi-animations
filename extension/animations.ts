@@ -249,7 +249,7 @@ export const crushScramble: AnimationFn = (f) => {
 
 // ─── 21 Pi Logo Pulse ────────────────────────────────────────────
 export const piLogoPulse: AnimationFn = (f) => {
-	const piGlyph = "\ue22c", label = " pi";
+	const piGlyph = "\ue22c", label = "";
 	const breath = (Math.sin(f * 0.08) + 1) / 2;
 	const gi = Math.floor((f * 0.3) % PI_GRAD.length);
 	const gi2 = (gi + 1) % PI_GRAD.length;
