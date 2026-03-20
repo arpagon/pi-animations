@@ -81,7 +81,7 @@ export const glitchText: AnimationFn = (f, _w, phase) => {
 // ─── 05 Plasma Wave (1-line) ─────────────────────────────────────
 export const plasmaWave: AnimationFn = (f, w) => {
 	const chars = " ·∘○◎●◉█";
-	const W = Math.min(50, w);
+	const W = w;
 	let line = "";
 	for (let x = 0; x < W; x++) {
 		const v = (Math.sin(x * 0.15 + f * 0.08) + Math.sin(x * 0.1 + f * 0.06) + Math.sin(Math.sqrt(x * x) * 0.15 + f * 0.1)) / 3;
@@ -113,11 +113,16 @@ export const pacmanChase: AnimationFn = (f, w) => {
 };
 
 // ─── 07 Matrix Rain (1-line) ─────────────────────────────────────
-const matrixDrops: { x: number; phase: number; speed: number }[] = [];
-for (let i = 0; i < 20; i++) matrixDrops.push({ x: Math.floor(Math.random() * 50), phase: Math.random() * 100, speed: 0.3 + Math.random() * 0.5 });
+let matrixDrops: { x: number; phase: number; speed: number }[] = [];
+let matrixLastW = 0;
 const matrixChars = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘ012789Z";
 export const matrixRain: AnimationFn = (f, w) => {
-	const W = Math.min(50, w);
+	const W = w;
+	if (W !== matrixLastW) {
+		const count = Math.max(15, Math.floor(W * 0.4));
+		matrixDrops = Array.from({ length: count }, () => ({ x: Math.floor(Math.random() * W), phase: Math.random() * 100, speed: 0.3 + Math.random() * 0.5 }));
+		matrixLastW = W;
+	}
 	const buf = new Array(W).fill(" ");
 	for (const d of matrixDrops) {
 		const pos = Math.floor((f * d.speed + d.phase) % (W + 5));
@@ -147,13 +152,22 @@ export const pipeline: AnimationFn = (f) => {
 // ─── 10 Starfield ────────────────────────────────────────────────
 const starChars = ["·", "∙", "•", "✦", "★"];
 type Star = { x: number; speed: number; bright: number; ch: string };
-const stars: Star[] = Array.from({ length: 30 }, () => {
-	const speed = 0.2 + Math.random() * 1.2;
-	const layer = Math.floor(speed / 0.3);
-	return { x: Math.random() * 55, speed, bright: Math.min(255, 80 + layer * 40), ch: starChars[Math.min(layer, starChars.length - 1)] };
-});
+let stars: Star[] = [];
+let starsLastW = 0;
+function ensureStars(W: number) {
+	if (W !== starsLastW) {
+		const count = Math.max(20, Math.floor(W * 0.6));
+		stars = Array.from({ length: count }, () => {
+			const speed = 0.2 + Math.random() * 1.2;
+			const layer = Math.floor(speed / 0.3);
+			return { x: Math.random() * W, speed, bright: Math.min(255, 80 + layer * 40), ch: starChars[Math.min(layer, starChars.length - 1)] };
+		});
+		starsLastW = W;
+	}
+}
 export const starfield: AnimationFn = (f, w) => {
-	const W = Math.min(55, w);
+	const W = w;
+	ensureStars(W);
 	const buf = new Array(W).fill(" ");
 	for (const s of stars) {
 		const xi = Math.floor(s.x);
@@ -167,9 +181,11 @@ export const starfield: AnimationFn = (f, w) => {
 // ─── 12 Fire ─────────────────────────────────────────────────────
 const fireChars = " .:-=+*#%@█";
 const firePalette = [[0, 0, 0], [50, 0, 0], [120, 30, 0], [200, 80, 0], [240, 160, 30], [255, 230, 120], [255, 255, 200]];
-const fireBuf = Array.from({ length: 4 }, () => new Float64Array(45));
+let fireBuf: Float64Array[] = [];
+let fireLastW = 0;
 export const fire: AnimationFn = (f, w) => {
-	const W = Math.min(45, w);
+	const W = w;
+	if (W !== fireLastW) { fireBuf = Array.from({ length: 4 }, () => new Float64Array(W)); fireLastW = W; }
 	for (let x = 0; x < W; x++) fireBuf[3][x] = Math.random() > 0.35 ? 1 : Math.random() * 0.5;
 	for (let y = 0; y < 3; y++) for (let x = 0; x < W; x++)
 		fireBuf[y][x] = (fireBuf[y + 1][(x - 1 + W) % W] + fireBuf[y + 1][x] + fireBuf[y + 1][(x + 1) % W]) / 3.1;
@@ -336,7 +352,7 @@ export const orbitDots: AnimationFn = (f, _w, phase) => {
 const bounceTrail: { pos: number; age: number; color: number[] }[] = [];
 const trailGlyphs = ["█", "▓", "▒", "░", "·"];
 export const neonBounce: AnimationFn = (f, w) => {
-	const W = Math.min(35, w);
+	const W = w;
 	const cycle = (f * 0.6) % (W * 2), pos = Math.floor(cycle < W ? cycle : W * 2 - cycle);
 	const [r, g, b] = lerpGrad(PI_GRAD, pos / W);
 	bounceTrail.push({ pos, age: 0, color: [r, g, b] });
@@ -354,9 +370,11 @@ export const neonBounce: AnimationFn = (f, w) => {
 };
 
 // ─── 3-LINE: Fire ────────────────────────────────────────────────
-const fire3Buf = Array.from({ length: 5 }, () => new Float64Array(50));
+let fire3Buf: Float64Array[] = [];
+let fire3LastW = 0;
 export const fire3: AnimationFn = (f, w) => {
-	const W = Math.min(50, w);
+	const W = w;
+	if (W !== fire3LastW) { fire3Buf = Array.from({ length: 5 }, () => new Float64Array(W)); fire3LastW = W; }
 	for (let x = 0; x < W; x++) fire3Buf[4][x] = Math.random() > 0.3 ? 1 : Math.random() * 0.5;
 	for (let y = 0; y < 4; y++) for (let x = 0; x < W; x++)
 		fire3Buf[y][x] = (fire3Buf[y + 1][(x - 1 + W) % W] + fire3Buf[y + 1][x] + fire3Buf[y + 1][(x + 1) % W]) / 3.08;
@@ -376,10 +394,15 @@ export const fire3: AnimationFn = (f, w) => {
 };
 
 // ─── 3-LINE: Matrix Rain ─────────────────────────────────────────
-const mat3Drops: { x: number; y: number; speed: number; len: number }[] = [];
-for (let i = 0; i < 25; i++) mat3Drops.push({ x: Math.floor(Math.random() * 50), y: Math.random() * -5, speed: 0.15 + Math.random() * 0.35, len: 2 + Math.floor(Math.random() * 3) });
+let mat3Drops: { x: number; y: number; speed: number; len: number }[] = [];
+let mat3LastW = 0;
 export const matrix3: AnimationFn = (f, w) => {
-	const W = Math.min(50, w), H = 3;
+	const W = w, H = 3;
+	if (W !== mat3LastW) {
+		const count = Math.max(20, Math.floor(W * 0.5));
+		mat3Drops = Array.from({ length: count }, () => ({ x: Math.floor(Math.random() * W), y: Math.random() * -5, speed: 0.15 + Math.random() * 0.35, len: 2 + Math.floor(Math.random() * 3) }));
+		mat3LastW = W;
+	}
 	const grid: string[][] = Array.from({ length: H }, () => new Array(W).fill(rgb(10, 30, 10) + " "));
 	for (const d of mat3Drops) {
 		d.y += d.speed;
@@ -397,14 +420,19 @@ export const matrix3: AnimationFn = (f, w) => {
 };
 
 // ─── 3-LINE: Starfield ───────────────────────────────────────────
-const stars3: { x: number; y: number; speed: number; ch: string; bright: number }[] = [];
-for (let i = 0; i < 40; i++) {
-	const speed = 0.15 + Math.random() * 1.0;
-	const layer = Math.floor(speed / 0.25);
-	stars3.push({ x: Math.random() * 55, y: Math.floor(Math.random() * 3), speed, ch: starChars[Math.min(layer, starChars.length - 1)], bright: Math.min(255, 60 + layer * 40) });
-}
+let stars3: { x: number; y: number; speed: number; ch: string; bright: number }[] = [];
+let stars3LastW = 0;
 export const starfield3: AnimationFn = (f, w) => {
-	const W = Math.min(55, w), H = 3;
+	const W = w, H = 3;
+	if (W !== stars3LastW) {
+		const count = Math.max(30, Math.floor(W * 0.7));
+		stars3 = Array.from({ length: count }, () => {
+			const speed = 0.15 + Math.random() * 1.0;
+			const layer = Math.floor(speed / 0.25);
+			return { x: Math.random() * W, y: Math.floor(Math.random() * 3), speed, ch: starChars[Math.min(layer, starChars.length - 1)], bright: Math.min(255, 60 + layer * 40) };
+		});
+		stars3LastW = W;
+	}
 	const grid: string[][] = Array.from({ length: H }, () => new Array(W).fill(" "));
 	for (const s of stars3) {
 		const xi = Math.floor(s.x);
@@ -417,7 +445,7 @@ export const starfield3: AnimationFn = (f, w) => {
 
 // ─── 3-LINE: Aurora ──────────────────────────────────────────────
 export const aurora3: AnimationFn = (f, w) => {
-	const W = Math.min(55, w), H = 3;
+	const W = w, H = 3;
 	const auroraChars = " ░▒▓█▓▒░";
 	const lines: string[] = [];
 	for (let y = 0; y < H; y++) {
