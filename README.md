@@ -4,21 +4,11 @@ Animated thinking, working, and tool-execution indicators for [pi coding agent](
 
 Replace pi's default spinner with 21 terminal animations — from demoscene fire to Matrix rain to Pac-Man — all rendered inline with ANSI true color and Nerd Font glyphs.
 
-## Preview
+## Demo
 
-```
-⠋ ᗣ   ᗧ··●·······●·······     ← Pac-Man (working)
-⠸ ▐   ·░▒▓█               ▌   ← Neon Bounce (working)
-⠙ 69~a@~*01€€d_71 Working...   ← Crush Scramble (working)
-```
+https://github.com/user-attachments/assets/demo.mp4
 
-3-line animations:
-
-```
-██▓▓▓▓▓▓▓▒▒▓▓▓▓▓▓████▓▓▓▓▒▒▒░░░░
-▓▓▓▓▓▓▓▓███████▓▓▓▓▒▒▒▒░░░░░
-████▓▓▓▓▓▓▓▒▒▒▒▒░░░░░░░░   ← Fire 3-line
-```
+<video src="assets/demo.mp4" width="100%" autoplay loop muted></video>
 
 ## Install
 
