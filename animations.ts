@@ -821,13 +821,13 @@ export default function (pi: ExtensionAPI) {
 				invalidate() {},
 				dispose() { clearInterval(timer); },
 				handleInput(data: string) {
-					if (data === "\x1b" || data === "q") {
+					if (data === "q") {
 						clearInterval(timer);
 						done(null);
-					} else if (data === "\x1b[C" || data === "l" || data === "n") {
+					} else if (data === "\x1b[C" || data === "\x1bOC" || data === "l" || data === "n") {
 						idx = (idx + 1) % ANIMATIONS.length;
 						frame = 0;
-					} else if (data === "\x1b[D" || data === "h" || data === "p") {
+					} else if (data === "\x1b[D" || data === "\x1bOD" || data === "h" || data === "p") {
 						idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
 						frame = 0;
 					} else if (data === "\r" || data === " ") {
@@ -852,7 +852,7 @@ export default function (pi: ExtensionAPI) {
 						theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
 					);
 					out.push("");
-					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
+					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  q quit"));
 					out.push("");
 					return out;
 				},
