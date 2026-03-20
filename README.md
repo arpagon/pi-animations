@@ -22,6 +22,12 @@ pi install npm:pi-animations
 pi install git:github.com/arpagon/pi-animations
 ```
 
+### Try without installing
+
+```bash
+pi -e npm:pi-animations
+```
+
 ### Manual
 
 ```bash
