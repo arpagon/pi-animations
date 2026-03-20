@@ -13,13 +13,13 @@ Replace pi's default spinner with 21 terminal animations — from demoscene fire
 ### From npm (recommended)
 
 ```bash
-pi install pi-animations
+pi install npm:pi-animations
 ```
 
 ### From GitHub
 
 ```bash
-pi install github.com/arpagon/pi-animations
+pi install git:github.com/arpagon/pi-animations
 ```
 
 ### Manual
@@ -35,6 +35,16 @@ Or add to `~/.pi/agent/agent.json`:
 {
   "extensions": [
     "npm:pi-animations"
+  ]
+}
+```
+
+Or via git:
+
+```json
+{
+  "extensions": [
+    "git:github.com/arpagon/pi-animations"
   ]
 }
 ```
