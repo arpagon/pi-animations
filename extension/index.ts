@@ -129,7 +129,8 @@ export default function (pi: ExtensionAPI) {
 				animName = randomWorkingName || state.workingAnim;
 				phase = "working";
 			}
-			const lines = renderFrame(animName, state.frame, 50, phase);
+			const termWidth = process.stdout.columns || 80;
+			const lines = renderFrame(animName, state.frame, termWidth - 4, phase);
 			if (lines.length === 1) {
 				// Single line: use setWorkingMessage (replaces Loader text)
 				if (lastAnimLines > 1) ctx.ui.setWidget("anim-multi", undefined);
