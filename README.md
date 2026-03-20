@@ -6,7 +6,7 @@ Replace pi's default spinner with 21 terminal animations — from demoscene fire
 
 ## Demo
 
-https://github.com/arpagon/pi-animations/releases/download/v0.1.0/demo.mp4
+![pi-animations demo](assets/demo.gif)
 
 ## Install
 
