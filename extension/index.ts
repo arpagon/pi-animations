@@ -291,134 +291,105 @@ export default function (pi: ExtensionAPI) {
 		stopThinkingTicker();
 	});
 
-	// ─── Width Command ───────────────────────────────────────────
-	pi.registerCommand("animation-width", {
-		description: "Set animation width: full, default (50), or a number",
-		getArgumentCompletions: (prefix) => {
-			const items = [
-				{ value: "full", label: "full", description: "Full terminal width" },
-				{ value: "default", label: "default", description: "50 columns" },
-				{ value: "80", label: "80", description: "80 columns" },
-				{ value: "120", label: "120", description: "120 columns" },
-			];
-			if (!prefix) return items;
-			return items.filter(i => i.value.startsWith(prefix));
-		},
-		handler: async (args, ctx) => {
-			const arg = args.trim().toLowerCase();
-			if (!arg) {
-				ctx.ui.notify(`Current width: ${state.width}`, "info");
-				return;
+	// ─── Showcase (used by /animation showcase) ─────────────────
+	async function runShowcase(ctx: ExtensionContext) {
+		await ctx.ui.custom((tui, theme, _keybindings, done) => {
+			let idx = 0;
+			let frame = 0;
+
+			const timer = setInterval(() => {
+				frame++;
+				tui.requestRender();
+			}, 50);
+
+			return {
+				invalidate() {},
+				dispose() { clearInterval(timer); },
+				handleInput(data: string) {
+					if (data === "\x1b" || data === "q") {
+						clearInterval(timer);
+						done(null);
+					} else if (data === "\x1b[C" || data === "l" || data === "n") {
+						idx = (idx + 1) % ANIMATIONS.length;
+						frame = 0;
+					} else if (data === "\x1b[D" || data === "h" || data === "p") {
+						idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
+						frame = 0;
+					} else if (data === "\r" || data === " ") {
+						clearInterval(timer);
+						done(ANIMATIONS[idx].name);
+					}
+				},
+				render(width: number): string[] {
+					const anim = ANIMATIONS[idx];
+					const w = resolveWidth(state.width);
+					const raw = anim.fn(frame, Math.min(w, width - 4));
+					const rendered = Array.isArray(raw) ? raw : [raw];
+					const out: string[] = [];
+					out.push("");
+					out.push(theme.fg("accent", "  ▶ Animation Showcase"));
+					out.push("");
+					for (const line of rendered) out.push(`  ${line}`);
+					out.push("");
+					out.push(
+						theme.fg("muted", `  [${idx + 1}/${ANIMATIONS.length}] `) +
+						theme.fg("text", anim.name) +
+						theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
+					);
+					out.push("");
+					out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
+					out.push("");
+					return out;
+				},
+			};
+		}).then((selectedName) => {
+			if (selectedName) {
+				state.enabled = true;
+				state.randomMode = false;
+				state.workingAnim = selectedName;
+				state.thinkingAnim = selectedName;
+				state.toolAnim = selectedName;
+				persistConfig();
+				ctx.ui.notify(`Animation set to: ${selectedName} (all states)`, "info");
 			}
-			if (arg === "full") {
-				state.width = "full";
-			} else if (arg === "default") {
-				state.width = "default";
-			} else {
-				const n = parseInt(arg, 10);
-				if (isNaN(n) || n < 10) {
-					ctx.ui.notify("Width must be 'full', 'default', or a number >= 10", "error");
-					return;
-				}
-				state.width = n;
-			}
-			persistConfig();
-			ctx.ui.notify(`Animation width set to: ${state.width}`, "info");
-		},
-	});
+		});
+	}
 
-	// ─── Showcase Command ────────────────────────────────────────
-	pi.registerCommand("animation-showcase", {
-		description: "Cycle through all animations (Escape to stop, ←/→ to switch)",
-		handler: async (_args, ctx) => {
-			await ctx.ui.custom((tui, theme, _keybindings, done) => {
-				let idx = 0;
-				let frame = 0;
-
-				const timer = setInterval(() => {
-					frame++;
-					tui.requestRender();
-				}, 50);
-
-				return {
-					invalidate() {},
-					dispose() { clearInterval(timer); },
-					handleInput(data: string) {
-						if (data === "\x1b" || data === "q") {
-							// Escape or q — exit
-							clearInterval(timer);
-							done(ANIMATIONS[idx].name);
-						} else if (data === "\x1b[C" || data === "l" || data === "n") {
-							// Right arrow, l, or n — next
-							idx = (idx + 1) % ANIMATIONS.length;
-							frame = 0;
-						} else if (data === "\x1b[D" || data === "h" || data === "p") {
-							// Left arrow, h, or p — prev
-							idx = (idx - 1 + ANIMATIONS.length) % ANIMATIONS.length;
-							frame = 0;
-						} else if (data === "\r" || data === " ") {
-							// Enter or space — select current
-							clearInterval(timer);
-							done(ANIMATIONS[idx].name);
-						}
-					},
-					render(width: number): string[] {
-						const anim = ANIMATIONS[idx];
-						const raw = anim.fn(frame, Math.min(50, width - 4));
-						const rendered = Array.isArray(raw) ? raw : [raw];
-						const out: string[] = [];
-						out.push("");
-						out.push(theme.fg("accent", "  ▶ Animation Showcase"));
-						out.push("");
-						for (const line of rendered) out.push(`  ${line}`);
-						out.push("");
-						out.push(
-							theme.fg("muted", `  [${idx + 1}/${ANIMATIONS.length}] `) +
-							theme.fg("text", anim.name) +
-							theme.fg("muted", ` (${anim.category}, ${anim.lines}L) — ${anim.description}`)
-						);
-						out.push("");
-						out.push(theme.fg("dim", "  ←/→ switch  •  Enter/Space select  •  Esc quit"));
-						out.push("");
-						return out;
-					},
-				};
-			}).then((selectedName) => {
-				if (selectedName) {
-					ctx.ui.notify(`Selected: ${selectedName}. Use /animation ${selectedName} to apply.`, "info");
-				}
-			});
-		},
-	});
-
-	// ─── Command ─────────────────────────────────────────────────
+	// ─── Single /animation command ───────────────────────────────
 	pi.registerCommand("animation", {
-		description: "Set thinking/working animation",
+		description: "Animated indicators: showcase, set <name>, width, on/off",
 		getArgumentCompletions: (prefix) => {
 			const items = [
+				// Subcommands
+				{ value: "showcase", label: "showcase", description: "Browse all animations interactively" },
+				{ value: "on", label: "on", description: "Enable animations" },
+				{ value: "off", label: "off", description: "Disable animations" },
+				{ value: "random", label: "random", description: "Random animation each time" },
+				// Width
+				{ value: "width full", label: "width full", description: "Full terminal width" },
+				{ value: "width default", label: "width default", description: "50 columns" },
+				// Direct set (all states)
 				...ANIMATIONS.map(a => ({
 					value: a.name,
 					label: a.name,
-					description: `[${a.category}] ${a.description}`,
+					description: `[${a.category}, ${a.lines}L] ${a.description}`,
 				})),
+				// Per-state
 				...ANIMATIONS.map(a => ({
 					value: `working:${a.name}`,
 					label: `working:${a.name}`,
-					description: `Working only — ${a.description}`,
+					description: `Working → ${a.description}`,
 				})),
 				...ANIMATIONS.map(a => ({
 					value: `thinking:${a.name}`,
 					label: `thinking:${a.name}`,
-					description: `Thinking only — ${a.description}`,
+					description: `Thinking → ${a.description}`,
 				})),
 				...ANIMATIONS.map(a => ({
 					value: `tool:${a.name}`,
 					label: `tool:${a.name}`,
-					description: `Tool execution only — ${a.description}`,
+					description: `Tool → ${a.description}`,
 				})),
-				{ value: "random", label: "random", description: "Random animation each time" },
-				{ value: "off", label: "off", description: "Disable animations" },
-				{ value: "on", label: "on", description: "Enable animations" },
 			];
 			if (!prefix) return items;
 			return items.filter(i => i.value.startsWith(prefix));
@@ -426,18 +397,25 @@ export default function (pi: ExtensionAPI) {
 		handler: async (args, ctx) => {
 			const arg = args.trim().toLowerCase();
 
+			// ── No args: show status ──
 			if (!arg) {
-				// Show current status
 				const status = state.enabled
-					? `Working: ${state.workingAnim}, Thinking: ${state.thinkingAnim}, Tool: ${state.toolAnim}, Width: ${state.width}${state.randomMode ? " (random)" : ""}`
+					? `Working: ${state.workingAnim}  •  Thinking: ${state.thinkingAnim}  •  Tool: ${state.toolAnim}  •  Width: ${state.width}${state.randomMode ? "  •  (random)" : ""}`
 					: "Animations disabled";
 				const list = ANIMATIONS.map(a =>
-					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)}] ${a.description}`
+					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)} ${a.lines}L] ${a.description}`
 				).join("\n");
-				ctx.ui.notify(`${status}\n\nAvailable:\n${list}`, "info");
+				ctx.ui.notify(`${status}\n\nAnimations:\n${list}\n\nUsage:\n  /animation showcase          Browse & pick\n  /animation <name>            Set all states\n  /animation working:<name>    Set working only\n  /animation thinking:<name>   Set thinking only\n  /animation tool:<name>       Set tool only\n  /animation width full|default|<n>\n  /animation on|off|random`, "info");
 				return;
 			}
 
+			// ── showcase ──
+			if (arg === "showcase") {
+				await runShowcase(ctx);
+				return;
+			}
+
+			// ── on/off/random ──
 			if (arg === "off") {
 				state.enabled = false;
 				stopWorkingAnimation();
@@ -447,24 +425,46 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify("Animations disabled", "info");
 				return;
 			}
-
 			if (arg === "on") {
 				state.enabled = true;
 				state.randomMode = false;
 				persistConfig();
-				ctx.ui.notify(`Animations enabled: working=${state.workingAnim}, thinking=${state.thinkingAnim}`, "info");
+				ctx.ui.notify(`Animations enabled`, "info");
 				return;
 			}
-
 			if (arg === "random") {
 				state.enabled = true;
 				state.randomMode = true;
 				persistConfig();
-				ctx.ui.notify("Random animation mode enabled", "info");
+				ctx.ui.notify("Random mode enabled", "info");
 				return;
 			}
 
-			// Parse: "name" or "working:name" or "thinking:name" or "tool:name"
+			// ── width ──
+			if (arg.startsWith("width")) {
+				const val = arg.slice(5).trim();
+				if (!val) {
+					ctx.ui.notify(`Width: ${state.width}`, "info");
+					return;
+				}
+				if (val === "full") {
+					state.width = "full";
+				} else if (val === "default") {
+					state.width = "default";
+				} else {
+					const n = parseInt(val, 10);
+					if (isNaN(n) || n < 10) {
+						ctx.ui.notify("Width: full | default | number >= 10", "error");
+						return;
+					}
+					state.width = n;
+				}
+				persistConfig();
+				ctx.ui.notify(`Width set to: ${state.width}`, "info");
+				return;
+			}
+
+			// ── Set animation: "name" or "working:name" etc ──
 			let target: "all" | "working" | "thinking" | "tool" = "all";
 			let name = arg;
 			if (arg.startsWith("working:")) { target = "working"; name = arg.slice(8); }
@@ -473,7 +473,7 @@ export default function (pi: ExtensionAPI) {
 
 			const anim = getAnimation(name);
 			if (!anim) {
-				ctx.ui.notify(`Unknown animation: ${name}. Use /animation to see list.`, "error");
+				ctx.ui.notify(`Unknown: "${name}". Try /animation showcase`, "error");
 				return;
 			}
 
@@ -482,12 +482,12 @@ export default function (pi: ExtensionAPI) {
 			if (target === "all" || target === "working") state.workingAnim = name;
 			if (target === "all" || target === "thinking") state.thinkingAnim = name;
 			if (target === "all" || target === "tool") state.toolAnim = name;
-
 			persistConfig();
+
 			const msg = target === "all"
-				? `working=${name}, thinking=${name}, tool=${name}`
-				: `${target}=${name}`;
-			ctx.ui.notify(`Animation set: ${msg}`, "info");
+				? `All → ${name}`
+				: `${target} → ${name}`;
+			ctx.ui.notify(msg, "info");
 		},
 	});
 }
