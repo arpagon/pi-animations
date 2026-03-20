@@ -12,17 +12,57 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { AssistantMessageComponent } from "@mariozechner/pi-coding-agent";
+import { AssistantMessageComponent, getAgentDir } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ANIMATIONS, getAnimation, getAnimationsForCategory, type AnimationFn, type AnimCategory, type AnimPhase } from "./animations.js";
 
 const PATCH_KEY = Symbol.for("pi.ext.animatedThinking.patch");
 const STATE_KEY = Symbol.for("pi.ext.animatedThinking.state");
+const CONFIG_NAME = "pi-tui-animations.json";
+
+// ─── Config persistence ─────────────────────────────────────────
+interface AnimConfig {
+	workingAnim?: string;
+	thinkingAnim?: string;
+	toolAnim?: string;
+	width?: "full" | "default" | number;
+	randomMode?: boolean;
+	enabled?: boolean;
+}
+
+function getConfigPath(): string {
+	return join(getAgentDir(), "extensions", CONFIG_NAME);
+}
+
+function loadConfig(): AnimConfig {
+	const path = getConfigPath();
+	if (!existsSync(path)) return {};
+	try {
+		return JSON.parse(readFileSync(path, "utf-8")) as AnimConfig;
+	} catch {
+		return {};
+	}
+}
+
+function saveConfig(config: AnimConfig): void {
+	const dir = join(getAgentDir(), "extensions");
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + "\n");
+}
+
+function resolveWidth(w: "full" | "default" | number | undefined): number {
+	if (w === "full" || w === undefined) return (process.stdout.columns || 80) - 4;
+	if (w === "default") return 50;
+	return Math.max(10, Math.min(w, (process.stdout.columns || 80) - 4));
+}
 
 interface AnimState {
-	workingAnim: string; // animation name for working state
-	thinkingAnim: string; // animation name for thinking state
-	toolAnim: string; // animation name for tool execution
+	workingAnim: string;
+	thinkingAnim: string;
+	toolAnim: string;
+	width: "full" | "default" | number;
 	randomMode: boolean;
 	frame: number;
 	workingTimer: ReturnType<typeof setInterval> | null;
@@ -84,23 +124,36 @@ function ensurePatch(): void {
 }
 
 export default function (pi: ExtensionAPI) {
+	const cfg = loadConfig();
 	const state: AnimState = {
-		workingAnim: "crush",
-		thinkingAnim: "shimmer",
-		toolAnim: "pipeline",
-		randomMode: false,
+		workingAnim: cfg.workingAnim || "crush",
+		thinkingAnim: cfg.thinkingAnim || "shimmer",
+		toolAnim: cfg.toolAnim || "pipeline",
+		width: cfg.width ?? "full",
+		randomMode: cfg.randomMode ?? false,
+		enabled: cfg.enabled ?? true,
 		frame: 0,
 		workingTimer: null,
 		thinkingTimer: null,
 		thinkingLabels: new Map(),
 		theme: undefined,
-		enabled: true,
 		isThinking: false,
 		isToolRunning: false,
 		currentWorkingCtx: null,
 	};
 	(globalThis as any)[STATE_KEY] = state;
 	ensurePatch();
+
+	function persistConfig() {
+		saveConfig({
+			workingAnim: state.workingAnim,
+			thinkingAnim: state.thinkingAnim,
+			toolAnim: state.toolAnim,
+			width: state.width,
+			randomMode: state.randomMode,
+			enabled: state.enabled,
+		});
+	}
 
 	// ─── Working animation ───────────────────────────────────────
 	let lastAnimLines = 0; // track if we need to switch between message/widget
@@ -129,8 +182,8 @@ export default function (pi: ExtensionAPI) {
 				animName = randomWorkingName || state.workingAnim;
 				phase = "working";
 			}
-			const termWidth = process.stdout.columns || 80;
-			const lines = renderFrame(animName, state.frame, termWidth - 4, phase);
+			const w = resolveWidth(state.width);
+			const lines = renderFrame(animName, state.frame, w, phase);
 			if (lines.length === 1) {
 				// Single line: use setWorkingMessage (replaces Loader text)
 				if (lastAnimLines > 1) ctx.ui.setWidget("anim-multi", undefined);
@@ -238,6 +291,42 @@ export default function (pi: ExtensionAPI) {
 		stopThinkingTicker();
 	});
 
+	// ─── Width Command ───────────────────────────────────────────
+	pi.registerCommand("animation-width", {
+		description: "Set animation width: full, default (50), or a number",
+		getArgumentCompletions: (prefix) => {
+			const items = [
+				{ value: "full", label: "full", description: "Full terminal width" },
+				{ value: "default", label: "default", description: "50 columns" },
+				{ value: "80", label: "80", description: "80 columns" },
+				{ value: "120", label: "120", description: "120 columns" },
+			];
+			if (!prefix) return items;
+			return items.filter(i => i.value.startsWith(prefix));
+		},
+		handler: async (args, ctx) => {
+			const arg = args.trim().toLowerCase();
+			if (!arg) {
+				ctx.ui.notify(`Current width: ${state.width}`, "info");
+				return;
+			}
+			if (arg === "full") {
+				state.width = "full";
+			} else if (arg === "default") {
+				state.width = "default";
+			} else {
+				const n = parseInt(arg, 10);
+				if (isNaN(n) || n < 10) {
+					ctx.ui.notify("Width must be 'full', 'default', or a number >= 10", "error");
+					return;
+				}
+				state.width = n;
+			}
+			persistConfig();
+			ctx.ui.notify(`Animation width set to: ${state.width}`, "info");
+		},
+	});
+
 	// ─── Showcase Command ────────────────────────────────────────
 	pi.registerCommand("animation-showcase", {
 		description: "Cycle through all animations (Escape to stop, ←/→ to switch)",
@@ -340,7 +429,7 @@ export default function (pi: ExtensionAPI) {
 			if (!arg) {
 				// Show current status
 				const status = state.enabled
-					? `Working: ${state.workingAnim}, Thinking: ${state.thinkingAnim}, Tool: ${state.toolAnim}${state.randomMode ? " (random)" : ""}`
+					? `Working: ${state.workingAnim}, Thinking: ${state.thinkingAnim}, Tool: ${state.toolAnim}, Width: ${state.width}${state.randomMode ? " (random)" : ""}`
 					: "Animations disabled";
 				const list = ANIMATIONS.map(a =>
 					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)}] ${a.description}`
@@ -354,6 +443,7 @@ export default function (pi: ExtensionAPI) {
 				stopWorkingAnimation();
 				stopThinkingTicker();
 				ctx.ui.setWorkingMessage();
+				persistConfig();
 				ctx.ui.notify("Animations disabled", "info");
 				return;
 			}
@@ -361,6 +451,7 @@ export default function (pi: ExtensionAPI) {
 			if (arg === "on") {
 				state.enabled = true;
 				state.randomMode = false;
+				persistConfig();
 				ctx.ui.notify(`Animations enabled: working=${state.workingAnim}, thinking=${state.thinkingAnim}`, "info");
 				return;
 			}
@@ -368,6 +459,7 @@ export default function (pi: ExtensionAPI) {
 			if (arg === "random") {
 				state.enabled = true;
 				state.randomMode = true;
+				persistConfig();
 				ctx.ui.notify("Random animation mode enabled", "info");
 				return;
 			}
@@ -391,6 +483,7 @@ export default function (pi: ExtensionAPI) {
 			if (target === "all" || target === "thinking") state.thinkingAnim = name;
 			if (target === "all" || target === "tool") state.toolAnim = name;
 
+			persistConfig();
 			const msg = target === "all"
 				? `working=${name}, thinking=${name}, tool=${name}`
 				: `${target}=${name}`;
