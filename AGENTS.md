@@ -4,7 +4,7 @@ Animated thinking/working/tool indicators for pi coding agent.
 
 ## Structure
 
-- `animations.ts` — single-file extension: 21 animations + `/animation` command + AssistantMessageComponent patch
+- `animations.ts` — integrated extension: 21 animations + `/animation` + `/spinner` commands + AssistantMessageComponent patch
 - `explorations/` — standalone demos (`bun run explorations/XX-name.ts`)
 - `tmux-demo.sh` — launch all demos in tmux
 
@@ -14,6 +14,7 @@ Animated thinking/working/tool indicators for pi coding agent.
 pi -e ./animations.ts
 /animation showcase    # browse all
 /animation fire3       # set all states
+/spinner claude        # Claude spinner frames
 ```
 
 ## Architecture
@@ -22,5 +23,5 @@ pi -e ./animations.ts
 - **3-line**: `setWidget("anim-multi", lines)` for multi-line
 - **Thinking label**: monkey-patch `AssistantMessageComponent.updateContent()`
 - **State priority**: thinking > tool > working
-- **Config**: `~/.pi/agent/extensions/pi-tui-animations.json`
+- **Config**: `~/.pi/agent/extensions/pi-tui-animations.json` (animations + spinner)
 - **AnimationFn**: `(frame, width, phase?) => string | string[]`
