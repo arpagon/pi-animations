@@ -1,8 +1,8 @@
 # pi-animations
 
-Animated thinking, working, and tool-execution indicators for [pi coding agent](https://github.com/badlogic/pi-mono).
+Animated thinking, working, and tool-execution indicators for [pi coding agent](https://github.com/badlogic/pi-mono), plus a configurable working spinner.
 
-Replace pi's default spinner with 21 terminal animations — from demoscene fire to Matrix rain to Pac-Man — all rendered inline with ANSI true color and Nerd Font glyphs.
+Replace pi's default spinner with 21 terminal animations — from demoscene fire to Matrix rain to Pac-Man — and manage the inline spinner frames from the same extension.
 
 ## Demo
 
@@ -57,7 +57,7 @@ Or via git:
 
 ## Usage
 
-Everything is under the `/animation` command:
+Everything is under `/animation` and `/spinner`:
 
 ```
 /animation                          Show status, list all animations, and help
@@ -72,7 +72,10 @@ Everything is under the `/animation` command:
 /animation random                   Random animation each time
 /animation on                       Enable animations
 /animation off                      Disable animations
+/spinner ...                        Frames: claude|braille|pulse|dot|star|none
 ```
+
+`/spinner` controls the loader icon.
 
 ### Example config
 
@@ -159,7 +162,7 @@ Configurable via `/animation width`.
 
 ### Persistence
 
-All settings are saved to `~/.pi/agent/extensions/pi-tui-animations.json` and restored on startup:
+All animation + spinner settings are saved to `~/.pi/agent/extensions/pi-tui-animations.json` and restored on startup:
 
 ```json
 {

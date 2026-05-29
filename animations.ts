@@ -13,6 +13,7 @@
  *   /animation tool:<name>      Set tool only
  *   /animation width full|default|<n>
  *   /animation on|off|random
+ *   /spinner               Configure working spinner frames
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -20,6 +21,12 @@ import { AssistantMessageComponent, getAgentDir } from "@mariozechner/pi-coding-
 import { Text, matchesKey } from "@mariozechner/pi-tui";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+	FRAME_PRESETS,
+	formatFrames,
+	getFrameConfig,
+	type FramePreset,
+} from "./spinner-data.js";
 
 const rgb = (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`;
 const bold = "\x1b[1m";
@@ -64,6 +71,17 @@ const PHASE_LABELS: Record<AnimPhase, string> = {
 	thinking: "Thinking",
 	working: "Working",
 	tool: "Running",
+};
+
+interface SpinnerConfig {
+	frames: FramePreset | "custom";
+	customFrames?: string[];
+	frameIntervalMs: number;
+}
+
+const DEFAULT_SPINNER_CONFIG: SpinnerConfig = {
+	frames: "claude",
+	frameIntervalMs: 150,
 };
 
 // ─── 02 Neural Pulse ─────────────────────────────────────────────
@@ -545,6 +563,7 @@ interface AnimConfig {
 	width?: "full" | "default" | number;
 	randomMode?: boolean;
 	enabled?: boolean;
+	workingSpinner?: Partial<SpinnerConfig>;
 }
 
 function getConfigPath(): string {
@@ -573,6 +592,25 @@ function resolveWidth(w: "full" | "default" | number | undefined): number {
 	return Math.max(10, Math.min(w, (process.stdout.columns || 80) - 4));
 }
 
+function getRawSpinnerFrames(config: SpinnerConfig): string[] {
+	if (config.frames === "custom" && config.customFrames && config.customFrames.length > 0) {
+		return config.customFrames;
+	}
+	return getFrameConfig(config.frames).frames;
+}
+
+function colorizeFrames(frames: string[], ctx: ExtensionContext): string[] {
+	return frames.map((f) => (f ? ctx.ui.theme.fg("accent", f) : f));
+}
+
+function describeFramePreset(config: SpinnerConfig): string {
+	if (config.frames === "custom") {
+		return `custom [${formatFrames(config.customFrames ?? [])}] @${config.frameIntervalMs}ms`;
+	}
+	const preset = FRAME_PRESETS[config.frames as FramePreset];
+	return `${config.frames} [${formatFrames(preset?.frames ?? [])}] @${preset?.intervalMs ?? config.frameIntervalMs}ms`;
+}
+
 interface AnimState {
 	workingAnim: string;
 	thinkingAnim: string;
@@ -588,6 +626,8 @@ interface AnimState {
 	isThinking: boolean;
 	isToolRunning: boolean;
 	currentWorkingCtx: ExtensionContext | null;
+	spinner: SpinnerConfig;
+	spinnerCtx: ExtensionContext | null;
 }
 
 function getState(): AnimState {
@@ -655,6 +695,11 @@ export default function (pi: ExtensionAPI) {
 		isThinking: false,
 		isToolRunning: false,
 		currentWorkingCtx: null,
+		spinner: {
+			...DEFAULT_SPINNER_CONFIG,
+			...(cfg.workingSpinner && typeof cfg.workingSpinner === "object" ? cfg.workingSpinner : {}),
+		},
+		spinnerCtx: null,
 	};
 	(globalThis as any)[STATE_KEY] = state;
 	ensurePatch();
@@ -667,7 +712,15 @@ export default function (pi: ExtensionAPI) {
 			width: state.width,
 			randomMode: state.randomMode,
 			enabled: state.enabled,
+			workingSpinner: state.spinner,
 		});
+	}
+
+	function applySpinnerIndicator(ctx: ExtensionContext) {
+		state.spinnerCtx = ctx;
+		const raw = getRawSpinnerFrames(state.spinner);
+		const colored = colorizeFrames(raw, ctx);
+		ctx.ui.setWorkingIndicator({ frames: colored, intervalMs: state.spinner.frameIntervalMs });
 	}
 
 	// ─── Working animation ───────────────────────────────────────
@@ -750,10 +803,18 @@ export default function (pi: ExtensionAPI) {
 	// ─── Events ──────────────────────────────────────────────────
 	pi.on("session_start", async (_e, ctx) => {
 		state.theme = ctx.ui.theme;
+		applySpinnerIndicator(ctx);
+		ctx.ui.setWorkingMessage();
 	});
 
 	pi.on("agent_start", async (_e, ctx) => {
-		startWorkingAnimation(ctx);
+		applySpinnerIndicator(ctx);
+		if (state.enabled) {
+			startWorkingAnimation(ctx);
+		} else {
+			stopWorkingAnimation(ctx);
+			ctx.ui.setWorkingMessage();
+		}
 	});
 
 	pi.on("agent_end", async (_e, ctx) => {
@@ -917,10 +978,11 @@ export default function (pi: ExtensionAPI) {
 				const status = state.enabled
 					? `Working: ${state.workingAnim}  •  Thinking: ${state.thinkingAnim}  •  Tool: ${state.toolAnim}  •  Width: ${state.width}${state.randomMode ? "  •  (random)" : ""}`
 					: "Animations disabled";
+				const spinner = `Spinner: ${describeFramePreset(state.spinner)}`;
 				const list = ANIMATIONS.map(a =>
 					`  ${a.name.padEnd(20)} [${a.category.padEnd(8)} ${a.lines}L] ${a.description}`
 				).join("\n");
-				ctx.ui.notify(`${status}\n\nAnimations:\n${list}\n\nUsage:\n  /animation showcase          Browse & pick\n  /animation <name>            Set all states\n  /animation working:<name>    Set working only\n  /animation thinking:<name>   Set thinking only\n  /animation tool:<name>       Set tool only\n  /animation width full|default|<n>\n  /animation on|off|random`, "info");
+				ctx.ui.notify(`${status}\n${spinner}\n\nAnimations:\n${list}\n\nUsage:\n  /animation showcase          Browse & pick\n  /animation <name>            Set all states\n  /animation working:<name>    Set working only\n  /animation thinking:<name>   Set thinking only\n  /animation tool:<name>       Set tool only\n  /animation width full|default|<n>\n  /animation on|off|random\n  /spinner ...                 Manage spinner frames`, "info");
 				return;
 			}
 
@@ -933,7 +995,7 @@ export default function (pi: ExtensionAPI) {
 			// ── on/off/random ──
 			if (arg === "off") {
 				state.enabled = false;
-				stopWorkingAnimation();
+				stopWorkingAnimation(ctx);
 				stopThinkingTicker();
 				ctx.ui.setWorkingMessage();
 				persistConfig();
@@ -1005,4 +1067,81 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(msg, "info");
 		},
 	});
+
+	// ─── Spinner command ────────────────────────────────────────
+	pi.registerCommand("spinner", {
+		description: "Configure working spinner frames.",
+		getArgumentCompletions: (prefix: string) => {
+			const items = [
+				{ value: "claude", label: "claude", description: "· ✢ ✳ ✶ ✻ ✽" },
+				{ value: "braille", label: "braille", description: "⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏" },
+				{ value: "pulse", label: "pulse", description: "· • ● •" },
+				{ value: "dot", label: "dot", description: "● (static)" },
+				{ value: "star", label: "star", description: "✧ ★ ✦ ✶ ✹" },
+				{ value: "none", label: "none", description: "Hide indicator" },
+				{ value: "frames ", label: "frames", description: "Custom comma-separated frames" },
+				{ value: "interval ", label: "interval", description: "Set frame interval in ms" },
+			];
+			const first = prefix.split(/\s+/)[0]?.toLowerCase() ?? "";
+			if (first === "frames" || first === "interval") return null;
+			const filtered = prefix ? items.filter((i) => i.value.startsWith(prefix.toLowerCase())) : items;
+			return filtered.length > 0 ? filtered : null;
+		},
+		handler: async (args, ctx) => {
+			const trimmed = args.trim();
+			if (!trimmed) {
+				ctx.ui.notify(`Frames: ${describeFramePreset(state.spinner)}`, "info");
+				return;
+			}
+
+			const parts = trimmed.split(/\s+/);
+			const sub = parts[0]!.toLowerCase();
+
+			if (sub === "frames" && parts.length > 1) {
+				const frameList = parts.slice(1).join("").split(",").map((s) => s.trim()).filter(Boolean);
+				if (frameList.length === 0) {
+					ctx.ui.notify("Usage: /spinner frames f1,f2,f3,...", "error");
+					return;
+				}
+				state.spinner.frames = "custom";
+				state.spinner.customFrames = frameList;
+				applySpinnerIndicator(ctx);
+				persistConfig();
+				ctx.ui.notify(`Custom frames set: ${formatFrames(frameList)}`, "success");
+				return;
+			}
+
+			if (sub === "interval" && parts.length > 1) {
+				const n = parseInt(parts[1]!, 10);
+				if (isNaN(n) || n < 0) {
+					ctx.ui.notify("Usage: /spinner interval <ms> (>= 0)", "error");
+					return;
+				}
+				state.spinner.frameIntervalMs = n;
+				applySpinnerIndicator(ctx);
+				persistConfig();
+				ctx.ui.notify(`Frame interval set to ${n}ms`, "success");
+				return;
+			}
+
+			const validPresets: FramePreset[] = ["claude", "braille", "pulse", "dot", "star", "none"];
+			const match = validPresets.find((p) => p === sub);
+			if (match) {
+				state.spinner.frames = match;
+				state.spinner.frameIntervalMs = FRAME_PRESETS[match].intervalMs;
+				delete state.spinner.customFrames;
+				applySpinnerIndicator(ctx);
+				persistConfig();
+				const label = match === "none" ? "hidden" : match;
+				ctx.ui.notify(`Spinner frames: ${label}`, "success");
+				return;
+			}
+
+			ctx.ui.notify(
+				"Usage: /spinner [claude|braille|pulse|dot|star|none|frames f1,f2,...|interval <ms>]",
+				"error",
+			);
+		},
+	});
+
 }

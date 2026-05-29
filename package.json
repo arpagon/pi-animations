@@ -1,7 +1,7 @@
 {
   "name": "pi-animations",
   "version": "0.1.3",
-  "description": "Animated thinking/working/tool indicators for the Pi coding agent — 21 terminal animations with ANSI true color and Nerd Font glyphs",
+  "description": "Animated thinking/working/tool indicators and configurable spinner frames for the Pi coding agent — 21 terminal animations with ANSI true color and Nerd Font glyphs",
   "license": "MIT",
   "author": "arpagon",
   "repository": {
@@ -24,6 +24,7 @@
   ],
   "files": [
     "animations.ts",
+    "spinner-data.ts",
     "README.md",
     "LICENSE"
   ],
