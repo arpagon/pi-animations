@@ -4,7 +4,7 @@ Animated thinking/working/tool indicators for pi coding agent.
 
 ## Structure
 
-- `animations.ts` — single-file extension: 21 animations + `/animation` command + AssistantMessageComponent patch
+- `animations.ts` — single-file extension: 26 animations + `/animation` command + AssistantMessageComponent patch
 - `explorations/` — standalone demos (`bun run explorations/XX-name.ts`)
 - `tmux-demo.sh` — launch all demos in tmux
 
@@ -19,7 +19,7 @@ pi -e ./animations.ts
 ## Architecture
 
 - **1-line**: `setWorkingMessage()` on pi's Loader
-- **3-line**: `setWidget("anim-multi", lines)` for multi-line
+- **Multi-line**: `setWidget("anim-multi", lines)` for widgets above the editor
 - **Thinking label**: monkey-patch `AssistantMessageComponent.updateContent()`
 - **State priority**: thinking > tool > working
 - **Config**: `~/.pi/agent/extensions/pi-tui-animations.json`

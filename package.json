@@ -1,7 +1,7 @@
 {
   "name": "pi-animations",
-  "version": "0.1.3",
-  "description": "Animated thinking/working/tool indicators for the Pi coding agent — 21 terminal animations with ANSI true color and Nerd Font glyphs",
+  "version": "0.1.4",
+  "description": "Animated thinking/working/tool indicators for the Pi coding agent — 26 terminal animations with ANSI true color and Nerd Font glyphs",
   "license": "MIT",
   "author": "arpagon",
   "repository": {

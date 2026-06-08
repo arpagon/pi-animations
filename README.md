@@ -2,7 +2,7 @@
 
 Animated thinking, working, and tool-execution indicators for [pi coding agent](https://github.com/badlogic/pi-mono).
 
-Replace pi's default spinner with 21 terminal animations — from demoscene fire to Matrix rain to Pac-Man — all rendered inline with ANSI true color and Nerd Font glyphs.
+Replace pi's default spinner with 26 terminal animations — from demoscene fire to Matrix rain to Unicode block loaders — all rendered inline with ANSI true color and Nerd Font glyphs.
 
 ## Demo
 
@@ -106,15 +106,20 @@ Everything is under the `/animation` command:
 | `typewriter` | both | Themed typewriter messages |
 | `orbit-dots` | thinking | Pulsing orbit dots |
 | `neon-bounce` | working | Neon ball bouncing between walls |
+| `block-wave` | thinking | Symmetric Unicode block wave |
+| `conveyor` | working | Unicode block conveyor loop |
+| `accordion` | working | Eased Unicode block accordion |
 
-### 3-line
+### Multi-line
 
-| Name | Category | Description |
-|------|----------|-------------|
-| `fire3` | working | 🔥 Demoscene fire |
-| `matrix3` | both | 🟢 Matrix rain |
-| `starfield3` | thinking | ✦ Deep starfield |
-| `aurora` | thinking | 🌌 Aurora borealis |
+| Name | Lines | Category | Description |
+|------|-------|----------|-------------|
+| `square-snake` | 5 | both | Unicode square snake |
+| `infinity-track` | 5 | thinking | Unicode figure-8 track |
+| `fire3` | 3 | working | 🔥 Demoscene fire |
+| `matrix3` | 3 | both | 🟢 Matrix rain |
+| `starfield3` | 3 | thinking | ✦ Deep starfield |
+| `aurora` | 3 | thinking | 🌌 Aurora borealis |
 
 ### Categories
 
@@ -140,7 +145,7 @@ Priority: **thinking > tool > working**. If the model is thinking while a tool r
 ### Rendering
 
 - **1-line animations** use `ctx.ui.setWorkingMessage()` to replace the Loader's text inline alongside pi's braille spinner.
-- **3-line animations** use `ctx.ui.setWidget()` to render a multi-line widget.
+- **Multi-line animations** use `ctx.ui.setWidget()` to render a widget above the editor.
 - **Thinking label** patches `AssistantMessageComponent.updateContent()` to animate the collapsed "Thinking..." text in the message body.
 
 ### Phase-aware text
@@ -153,7 +158,7 @@ Animations that display text (glitch-text, crush, shimmer, orbit-dots) automatic
 
 ### Full-width rendering
 
-Visual animations (fire, plasma, matrix, starfield, aurora, neon-bounce) scale to fill the terminal width. Structural animations (pacman, pipeline, neural-pulse) keep a fixed size.
+Visual animations (fire, plasma, matrix, starfield, aurora, neon-bounce) scale to fill the terminal width. Structural/path animations (pacman, pipeline, neural-pulse, block-wave, conveyor, accordion, square-snake, infinity-track) keep a fixed or capped size.
 
 Configurable via `/animation width`.
 
@@ -201,7 +206,7 @@ tmux attach -t pi-anims
 
 ```
 pi-animations/
-├── animations.ts         Extension: 21 animations + /animation command
+├── animations.ts         Extension: 26 animations + /animation command
 ├── package.json
 ├── explorations/         Standalone animation demos (bun run)
 ├── tmux-demo.sh          Launch all demos in tmux
@@ -217,7 +222,7 @@ pi-animations/
 export const myAnimation: AnimationFn = (frame, width, phase?) => {
     const label = PHASE_LABELS[phase || "thinking"];
     // ... render logic using frame counter and width
-    return "single line result";    // or ["line1", "line2", "line3"] for 3-line
+    return "single line result";    // or ["line1", "line2", "line3"] for multi-line
 };
 ```
 

@@ -66,6 +66,49 @@ const PHASE_LABELS: Record<AnimPhase, string> = {
 	tool: "Running",
 };
 
+// Unicode block-loader helpers (inspired by monospace CSS loaders)
+const BLOCK_RED: [number, number, number] = [228, 60, 83];
+type BlockCell = { x: number; y: number; ch: string };
+
+function blockCell(ch: string): string {
+	if (ch === "█") return bold + rgb(255, 76, 100) + ch + nobold;
+	if (ch === "▓") return rgb(BLOCK_RED[0], BLOCK_RED[1], BLOCK_RED[2]) + ch;
+	if (ch === "▒") return rgb(190, 55, 78) + ch;
+	return rgb(145, 50, 68) + ch;
+}
+
+function trackCell(): string {
+	return rgb(78, 48, 58) + "░";
+}
+
+function wrapIndex(i: number, len: number): number {
+	return ((i % len) + len) % len;
+}
+
+function renderBlockTrack(width: number, blocks: { pos: number; ch: string }[]): string {
+	const cells = Array.from({ length: width }, () => trackCell());
+	for (const b of blocks) {
+		const pos = Math.round(b.pos);
+		if (pos >= 0 && pos < width) cells[pos] = blockCell(b.ch);
+	}
+	return cells.join("") + reset;
+}
+
+function renderBlockGrid(width: number, height: number, isTrack: (x: number, y: number) => boolean, blocks: BlockCell[]): string[] {
+	const grid = Array.from({ length: height }, (_, y) =>
+		Array.from({ length: width }, (_, x) => isTrack(x, y) ? trackCell() : " ")
+	);
+	for (const b of blocks) {
+		if (b.x >= 0 && b.x < width && b.y >= 0 && b.y < height) grid[b.y][b.x] = blockCell(b.ch);
+	}
+	return grid.map(row => row.join("") + reset);
+}
+
+function pathCell(path: { x: number; y: number }[], idx: number, ch: string): BlockCell {
+	const p = path[wrapIndex(idx, path.length)];
+	return { x: p.x, y: p.y, ch };
+}
+
 // ─── 02 Neural Pulse ─────────────────────────────────────────────
 const neuralPulse: AnimationFn = (f, w) => {
 	const N = Math.min(14, Math.floor(w / 4));
@@ -387,6 +430,87 @@ const neonBounce: AnimationFn = (f, w) => {
 	return rgb(80, 80, 100) + "▐" + buf.join("") + rgb(80, 80, 100) + "▌" + reset;
 };
 
+// ─── Unicode Block Loaders ───────────────────────────────────────
+const blockWave: AnimationFn = (f, w) => {
+	const W = Math.max(10, Math.min(28, w));
+	const half = (W - 1) / 2;
+	const cycle = half * 2;
+	const t = ((f * 0.22) % cycle + cycle) % cycle;
+	const p = t <= half ? t : cycle - t;
+	const p2 = W - 1 - p;
+	let line = "";
+	for (let x = 0; x < W; x++) {
+		const dist = Math.min(Math.abs(x - p), Math.abs(x - p2));
+		if (dist < 0.6) line += blockCell("█");
+		else if (dist < 1.3) line += blockCell("▓");
+		else if (dist < 2.2) line += blockCell("▒");
+		else line += trackCell();
+	}
+	return line + reset;
+};
+
+const conveyorLoop: AnimationFn = (f, w) => {
+	const W = Math.max(10, Math.min(32, w));
+	const head = Math.floor((f * 0.45) % (W + 4)) - 2;
+	return renderBlockTrack(W, [
+		{ pos: head - 2, ch: "▒" },
+		{ pos: head - 1, ch: "▓" },
+		{ pos: head, ch: "█" },
+	]);
+};
+
+function accordionBlockPosition(frame: number, width: number): number {
+	const period = 90;
+	const t = ((frame % period) + period) % period / period;
+	return ((1 - Math.cos(t * Math.PI * 2)) / 2) * (width - 1);
+}
+
+const accordionLoader: AnimationFn = (f, w) => {
+	const W = Math.max(10, Math.min(32, w));
+	return renderBlockTrack(W, [
+		{ pos: accordionBlockPosition(f - 8, W), ch: "▒" },
+		{ pos: accordionBlockPosition(f - 4, W), ch: "▓" },
+		{ pos: accordionBlockPosition(f, W), ch: "█" },
+	]);
+};
+
+const SQUARE_SNAKE_PATH: { x: number; y: number }[] = [
+	{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 4, y: 0 },
+	{ x: 4, y: 1 }, { x: 4, y: 2 }, { x: 4, y: 3 }, { x: 4, y: 4 },
+	{ x: 3, y: 4 }, { x: 2, y: 4 }, { x: 1, y: 4 }, { x: 0, y: 4 },
+	{ x: 0, y: 3 }, { x: 0, y: 2 }, { x: 0, y: 1 },
+];
+
+const squareSnake: AnimationFn = (f) => {
+	const step = Math.floor(f * 0.35);
+	return renderBlockGrid(5, 5, () => false, [
+		pathCell(SQUARE_SNAKE_PATH, step - 3, "░"),
+		pathCell(SQUARE_SNAKE_PATH, step - 2, "▒"),
+		pathCell(SQUARE_SNAKE_PATH, step - 1, "▓"),
+		pathCell(SQUARE_SNAKE_PATH, step, "█"),
+	]);
+};
+
+const INFINITY_TRACK_PATH: { x: number; y: number }[] = [
+	{ x: 4, y: 0 }, { x: 3, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 },
+	{ x: 0, y: 1 }, { x: 0, y: 2 }, { x: 0, y: 3 }, { x: 0, y: 4 },
+	{ x: 1, y: 4 }, { x: 2, y: 4 }, { x: 3, y: 4 }, { x: 4, y: 4 },
+	{ x: 4, y: 3 }, { x: 4, y: 2 }, { x: 4, y: 1 }, { x: 4, y: 0 },
+	{ x: 5, y: 0 }, { x: 6, y: 0 }, { x: 7, y: 0 }, { x: 8, y: 0 },
+	{ x: 8, y: 1 }, { x: 8, y: 2 }, { x: 8, y: 3 }, { x: 8, y: 4 },
+	{ x: 7, y: 4 }, { x: 6, y: 4 }, { x: 5, y: 4 }, { x: 4, y: 4 },
+	{ x: 4, y: 3 }, { x: 4, y: 2 }, { x: 4, y: 1 },
+];
+
+const infinityTrack: AnimationFn = (f) => {
+	const step = Math.floor(f * 0.35);
+	return renderBlockGrid(9, 5, (x, y) => y === 0 || y === 4 || x === 0 || x === 4 || x === 8, [
+		pathCell(INFINITY_TRACK_PATH, step - 2, "▒"),
+		pathCell(INFINITY_TRACK_PATH, step - 1, "▓"),
+		pathCell(INFINITY_TRACK_PATH, step, "█"),
+	]);
+};
+
 // ─── 3-LINE: Fire ────────────────────────────────────────────────
 let fire3Buf: Float64Array[] = [];
 let fire3LastW = 0;
@@ -514,7 +638,12 @@ const ANIMATIONS: AnimationDef[] = [
 	{ name: "typewriter", fn: vibeTypewriter, category: "both", description: "Themed typewriter text", lines: 1 },
 	{ name: "orbit-dots", fn: orbitDots, category: "thinking", description: "Pulsing orbit dots", lines: 1 },
 	{ name: "neon-bounce", fn: neonBounce, category: "working", description: "Neon ball bouncing", lines: 1 },
-	// 3-line
+	{ name: "block-wave", fn: blockWave, category: "thinking", description: "Symmetric unicode block wave", lines: 1 },
+	{ name: "conveyor", fn: conveyorLoop, category: "working", description: "Unicode block conveyor loop", lines: 1 },
+	{ name: "accordion", fn: accordionLoader, category: "working", description: "Eased unicode block accordion", lines: 1 },
+	// multi-line
+	{ name: "square-snake", fn: squareSnake, category: "both", description: "Unicode square snake", lines: 5 },
+	{ name: "infinity-track", fn: infinityTrack, category: "thinking", description: "Unicode figure-8 track", lines: 5 },
 	{ name: "fire3", fn: fire3, category: "working", description: "🔥 Demoscene fire (3-line)", lines: 3 },
 	{ name: "matrix3", fn: matrix3, category: "both", description: "🟢 Matrix rain (3-line)", lines: 3 },
 	{ name: "starfield3", fn: starfield3, category: "thinking", description: "✦ Deep starfield (3-line)", lines: 3 },
@@ -632,7 +761,7 @@ function ensurePatch(): void {
 
 				// Render animated frame
 				const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
-				child.setText(renderFrame(animName, state.frame, 60));
+				child.setText(renderFrame(animName, state.frame, 60, "thinking")[0]);
 			}
 		} catch { /* never break rendering */ }
 	};
@@ -714,12 +843,13 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function stopWorkingAnimation(ctx?: ExtensionContext) {
+		const clearCtx = ctx || state.currentWorkingCtx;
 		if (state.workingTimer) {
 			clearInterval(state.workingTimer);
 			state.workingTimer = null;
 		}
-		if (lastAnimLines > 1 && ctx) {
-			ctx.ui.setWidget("anim-multi", undefined);
+		if (lastAnimLines > 1 && clearCtx) {
+			clearCtx.ui.setWidget("anim-multi", undefined);
 		}
 		lastAnimLines = 0;
 		state.currentWorkingCtx = null;
@@ -728,9 +858,10 @@ export default function (pi: ExtensionAPI) {
 	// ─── Thinking animation tick ─────────────────────────────────
 	function startThinkingTicker() {
 		if (state.thinkingTimer) return;
+		const randomThinkingName = state.randomMode ? pickRandom("thinking") : null;
 		state.thinkingTimer = setInterval(() => {
 			state.frame++;
-			const animName = state.randomMode ? pickRandom("thinking") : state.thinkingAnim;
+			const animName = randomThinkingName || state.thinkingAnim;
 			const lines = renderFrame(animName, state.frame, 60, "thinking");
 			for (const [, label] of state.thinkingLabels) {
 				// Thinking labels are always single-line Text components
@@ -933,7 +1064,7 @@ export default function (pi: ExtensionAPI) {
 			// ── on/off/random ──
 			if (arg === "off") {
 				state.enabled = false;
-				stopWorkingAnimation();
+				stopWorkingAnimation(ctx);
 				stopThinkingTicker();
 				ctx.ui.setWorkingMessage();
 				persistConfig();
